@@ -4,7 +4,7 @@ This document outlines the design and architecture of Momentum.
 
 ## Overview
 
-Momentum brings your to-dos, reminders, and CalDAV tasks into one flow — visible as lists or boards. Designed for people who want to see their life in motion.
+Momentum brings your to-dos, reminders, and CalDAV tasks into one flow—visible as lists or boards. Designed for people who want to see their life in motion.
 
 ## Architecture
 
