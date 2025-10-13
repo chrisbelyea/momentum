@@ -12,6 +12,18 @@ There are many to-do list apps and there are also many Kanban apps. They all gen
 
 *To be documented as the project develops*
 
+- backend
+  - 
+- frontends
+  - web app to start
+  - web app should support installing as a web app on desktop and mobile
+  - may add desktop app for Windows, macOS, and Linux
+  - may add iOS and Android native apps
+- deployment
+  - installable as a local application
+  - supports containers
+  - supports Kubernetes
+
 ## Key Components
 
 *To be documented as the project develops*
