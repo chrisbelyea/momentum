@@ -70,7 +70,7 @@ databaseChangeLog:
             tableName: sync_state
             columns:
               - column: { name: id, type: BIGINT, autoIncrement: true, constraints: { primaryKey: true, nullable: false } }
-              - column: { name: backend_id, type: BIGINT, constraints: { nullable: false } }
+              - column: { name: backend_id, type: BIGINT, constraints: { nullable: false, unique: true } }
               - column: { name: checkpoint, type: VARCHAR(255) }
               - column: { name: last_run_at, type: TIMESTAMP }
         - addForeignKeyConstraint:

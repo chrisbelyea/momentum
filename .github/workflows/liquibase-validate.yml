@@ -10,6 +10,7 @@ jobs:
       postgres:
         image: postgres:16
         env:
+          # Ephemeral credentials for CI testing only - never used in production
           POSTGRES_USER: momentum
           POSTGRES_PASSWORD: momentum
           POSTGRES_DB: momentum
@@ -34,7 +35,7 @@ jobs:
           LIQUIBASE_PASSWORD: momentum
           LIQUIBASE_DRIVER: org.postgresql.Driver
         run: |
-          curl -sSL https://download.liquibase.com/liquibase.zip -o liquibase.zip
+          curl -sSL https://github.com/liquibase/liquibase/releases/download/v4.27.0/liquibase-4.27.0.zip -o liquibase.zip
           unzip -q liquibase.zip -d $HOME/liquibase
           if [ -f liquibase/liquibase.properties ]; then props="--defaultsFile=liquibase/liquibase.properties"; else props=""; fi
           $HOME/liquibase/liquibase $props validate
