@@ -1,0 +1,24 @@
+name: Engineering task
+description: Track scoped engineering work
+title: "chore: <short title>"
+labels:
+  - type:task
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: Implementation Plan
+      description: Steps to modify code/docs
+  - type: textarea
+    id: dod
+    attributes:
+      label: Definition of Done
+      description: Tests, docs, CI, review checklist
+    validations:
+      required: true
