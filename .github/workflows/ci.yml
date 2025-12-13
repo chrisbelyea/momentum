@@ -9,10 +9,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     permissions:
       contents: read
-    
+
     env:
       LIQUIBASE_VERSION: 4.27.0
 
@@ -42,3 +42,21 @@ jobs:
           --username=sa \
           --password= \
           validate
+          
+    - name: Validate Repository Structure
+      run: |
+        set -e
+        echo "Validating required documentation files..."
+        test -f README.md || (echo "ERROR: README.md is missing" && exit 1)
+        test -f .github/CONTRIBUTING.md || (echo "ERROR: CONTRIBUTING.md is missing" && exit 1)
+        test -f requirements/specification.md || (echo "ERROR: specification.md is missing" && exit 1)
+        test -f requirements/vision.md || (echo "ERROR: vision.md is missing" && exit 1)
+        test -f docs/design-overview.md || (echo "ERROR: design-overview.md is missing" && exit 1)
+        echo "✓ All required documentation files present"
+
+        echo "Validating directory structure..."
+        test -d scripts/db || (echo "ERROR: scripts/db directory is missing" && exit 1)
+        test -d .github/workflows || (echo "ERROR: .github/workflows directory is missing" && exit 1)
+        echo "✓ Directory structure is valid"
+
+        echo "CI validation complete!"

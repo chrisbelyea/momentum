@@ -22,12 +22,32 @@ declare -A LABELS=(
   ["design-needed"]="#bfdadc"
 )
 
+declare -A DESCRIPTIONS=(
+  ["type:feature"]="New functionality or enhancement"
+  ["type:bug"]="Something isn't working correctly"
+  ["type:task"]="General maintenance or chore work"
+  ["type:docs"]="Documentation improvements or additions"
+  ["type:infra"]="Infrastructure, build, or deployment changes"
+  ["area:backend"]="Server-side logic and API"
+  ["area:sync"]="CalDAV synchronization and backend integration"
+  ["area:web"]="Web interface and htmx frontend"
+  ["area:native"]="Platform-native clients (desktop/mobile)"
+  ["area:security"]="Security-related changes or concerns"
+  ["area:ci"]="Continuous integration and testing"
+  ["priority:P1"]="High priority, should be addressed soon"
+  ["priority:P2"]="Medium priority, normal queue"
+  ["good-first-issue"]="Good for newcomers to the project"
+  ["blocked"]="Waiting on dependencies or external factors"
+  ["design-needed"]="Requires design discussion or specification"
+)
+
 for name in "${!LABELS[@]}"; do
   color=${LABELS[$name]#\#}
+  description="${DESCRIPTIONS[$name]}"
   if gh label list --json name | jq -e ".[].name == \"$name\"" >/dev/null 2>&1; then
     echo "Label exists: $name"
   else
-    gh label create "$name" --color "$color" --description "Auto-created by bootstrap script" || echo "Failed to create $name"
+    gh label create "$name" --color "$color" --description "$description" || echo "Failed to create $name"
   fi
 done
 
