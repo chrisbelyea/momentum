@@ -164,7 +164,7 @@ This section defines how VTODO properties map to internal task fields.
 - **Type**: DateTime (UTC)
 - **Required**: Only if `STATUS` is `COMPLETED`
 - **Rules**:
-  - Automatically set when status changes to `DONE` (internal status for `COMPLETED`)
+  - Automatically set when status changes to `COMPLETED`
   - Must be present when `STATUS` is `COMPLETED`
   - Stored in UTC timezone
   - Cleared if status changes from `COMPLETED` to another status
@@ -235,10 +235,10 @@ This section defines how VTODO properties map to internal task fields.
 - **Required**: No
 - **Rules**:
   - Value range: 0-100
-  - Must be 100 when `STATUS` is `COMPLETED`
+  - Automatically set to 100 when `STATUS` is `COMPLETED`
   - Must be less than 100 when `STATUS` is not `COMPLETED`
-  - Validation errors for out-of-range values
-- **Round-trip**: Preserved with validation
+  - Out-of-range values (< 0 or > 100) cause validation errors
+- **Round-trip**: Preserved with validation and auto-correction
 
 ### Related Tasks
 
@@ -425,10 +425,10 @@ All tasks must satisfy these validation rules before being stored or synced:
 
 1. If `STATUS` is `COMPLETED`:
    - `COMPLETED` date must be present
-   - `PERCENT-COMPLETE` must be 100 (auto-set if not already)
+   - `PERCENT-COMPLETE` automatically set to 100
 2. If `STATUS` is not `COMPLETED`:
    - `COMPLETED` date must be absent (cleared if present)
-   - `PERCENT-COMPLETE` must be less than 100 (if set)
+   - `PERCENT-COMPLETE` must be less than 100 (validation error if 100)
 3. Status transitions must be valid:
    - Any status can transition to `CANCELLED`
    - `TODO` → `IN_PROGRESS` → `DONE` is the normal flow
