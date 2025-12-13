@@ -28,3 +28,13 @@ jobs:
 
     - name: Verify Liquibase Installation
       run: liquibase --version
+
+    - name: Validate Liquibase Changesets
+      run: |
+        set -e
+        cd liquibase
+        liquibase --defaultsFile=liquibase.properties validate
+      env:
+        # Validation doesn't need actual database connection
+        # but Liquibase requires valid JDBC URL format
+        LIQUIBASE_COMMAND_URL: "offline:sqlite?changeLogFile=changelog.xml"
