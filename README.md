@@ -6,6 +6,7 @@ Momentum brings your to-dos, reminders, and CalDAV tasks into one flow — visib
 - Specification: [requirements/specification.md](requirements/specification.md)
 - Features: [requirements/feature-list.md](requirements/feature-list.md)
 - Design Overview: [docs/design-overview.md](docs/design-overview.md)
+- VTODO Mapping: [docs/vtodo-mapping.md](docs/vtodo-mapping.md)
 
 ## Implementing with Copilot Agents and GitHub
 - Use Copilot Agents to turn spec items into actionable tasks:
