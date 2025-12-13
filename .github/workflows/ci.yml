@@ -33,8 +33,12 @@ jobs:
       run: |
         set -e
         cd liquibase
-        liquibase --defaultsFile=liquibase.properties validate
-      env:
-        # Validation doesn't need actual database connection
-        # but Liquibase requires valid JDBC URL format
-        LIQUIBASE_COMMAND_URL: "offline:sqlite?changeLogFile=changelog.xml"
+        # Use in-memory H2 database for validation (H2 is bundled with Liquibase)
+        # This validates changelog structure, syntax, and semantic correctness
+        liquibase \
+          --changeLogFile=changelog.xml \
+          --url="jdbc:h2:mem:validation" \
+          --driver=org.h2.Driver \
+          --username=sa \
+          --password= \
+          validate
