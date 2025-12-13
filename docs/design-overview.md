@@ -227,6 +227,9 @@ Synchronization can be triggered by:
 - **Push notification**: Backend-initiated webhook or push notification (when supported)
 - **On-connect**: When backend connection is first established or restored
 - **After local change**: Immediate push of local changes to backend (optional, configurable)
+  - When enabled, local changes trigger immediate sync to avoid waiting for the next periodic sync
+  - Periodic sync still runs to fetch remote changes from backends
+  - Acts as a complement to periodic sync, not a replacement
 
 #### Bidirectional Sync
 
@@ -337,7 +340,7 @@ Users can access conflict history to:
 #### Idempotent Operations
 
 All sync operations are designed to be idempotent—they can be safely retried without duplicating data or causing inconsistencies:
-- Task creates use stable UIDs; duplicate creates are detected and ignored
+- Task creates use stable UIDs (UUID v4 generated client-side on task creation); duplicate creates are detected and ignored
 - Task updates are applied based on modification timestamp comparison
 - Task deletes are tracked by UID; redundant deletes are no-ops
 - Sync tokens are updated atomically only after successful sync completion
@@ -346,10 +349,10 @@ All sync operations are designed to be idempotent—they can be safely retried w
 
 The sync orchestrator handles various error conditions gracefully:
 
-- **Network errors**: Retry with exponential backoff; preserve local state
+- **Network errors**: Retry with exponential backoff (initial: 1s, max: 5 minutes, up to 5 attempts); preserve local state
 - **Authentication failures**: Alert user; pause sync until credentials are refreshed
-- **Rate limiting**: Respect rate limit headers; schedule retry after cooldown period
-- **Backend unavailable**: Temporary disable backend; retry periodically with exponential backoff
+- **Rate limiting**: Respect rate limit headers; schedule retry after cooldown period (or use exponential backoff if no headers)
+- **Backend unavailable**: Temporary disable backend; retry periodically with exponential backoff (initial: 1 minute, max: 1 hour, up to 10 attempts before requiring manual intervention)
 - **Data validation errors**: Log error; skip invalid task; continue with remaining tasks
 - **Partial sync failures**: Commit successful changes; preserve sync token for resumed incremental sync
 
