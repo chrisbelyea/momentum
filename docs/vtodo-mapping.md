@@ -192,7 +192,7 @@ This section defines how VTODO properties map to internal task fields.
   - Medium: `5` → Yellow/Normal indicator
   - Low: `6-9` → Blue/Low indicator
   - None: `0` → No indicator
-- **Round-trip**: Preserved with range validation
+- **Round-trip**: Preserved with range validation (values clamped to 0-9)
 
 ### Description
 
@@ -467,7 +467,7 @@ For non-CalDAV backends (iCloud, Microsoft To-Do, Google Tasks, etc.):
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | 2023-12-13 | Momentum Team | Initial canonical VTODO mapping specification |
+| 1.0 | 2025-12-13 | Momentum Team | Initial canonical VTODO mapping specification |
 
 ## References
 
