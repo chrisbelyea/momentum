@@ -12,7 +12,7 @@ jobs:
       contents: read
     
     env:
-      LIQUIBASE_VERSION: 4.27.0
+      LB_VERSION: 4.27.0
     
     steps:
       - uses: actions/checkout@v4
@@ -26,7 +26,7 @@ jobs:
       - name: Install Liquibase
         run: |
           set -e
-          curl -sSL https://github.com/liquibase/liquibase/releases/download/v${LIQUIBASE_VERSION}/liquibase-${LIQUIBASE_VERSION}.zip -o liquibase.zip
+          curl -sSL https://github.com/liquibase/liquibase/releases/download/v${LB_VERSION}/liquibase-${LB_VERSION}.zip -o liquibase.zip
           unzip -q liquibase.zip -d $HOME/liquibase
           $HOME/liquibase/liquibase --version
       
@@ -57,7 +57,7 @@ jobs:
       contents: read
     
     env:
-      LIQUIBASE_VERSION: 4.27.0
+      LB_VERSION: 4.27.0
     
     services:
       postgres:
@@ -87,7 +87,7 @@ jobs:
       - name: Install Liquibase
         run: |
           set -e
-          curl -sSL https://github.com/liquibase/liquibase/releases/download/v${LIQUIBASE_VERSION}/liquibase-${LIQUIBASE_VERSION}.zip -o liquibase.zip
+          curl -sSL https://github.com/liquibase/liquibase/releases/download/v${LB_VERSION}/liquibase-${LB_VERSION}.zip -o liquibase.zip
           unzip -q liquibase.zip -d $HOME/liquibase
           $HOME/liquibase/liquibase --version
       
