@@ -1,0 +1,41 @@
+name: Liquibase Validate
+on:
+  pull_request:
+    paths:
+      - 'liquibase/**'
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: momentum
+          POSTGRES_PASSWORD: momentum
+          POSTGRES_DB: momentum
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+      - name: Liquibase validate
+        env:
+          LIQUIBASE_URL: jdbc:postgresql://localhost:5432/momentum
+          LIQUIBASE_USERNAME: momentum
+          LIQUIBASE_PASSWORD: momentum
+          LIQUIBASE_DRIVER: org.postgresql.Driver
+        run: |
+          curl -sSL https://download.liquibase.com/liquibase.zip -o liquibase.zip
+          unzip -q liquibase.zip -d $HOME/liquibase
+          if [ -f liquibase/liquibase.properties ]; then props="--defaultsFile=liquibase/liquibase.properties"; else props=""; fi
+          $HOME/liquibase/liquibase $props validate
+          $HOME/liquibase/liquibase $props update

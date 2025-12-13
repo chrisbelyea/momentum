@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-indexes
+      author: copilot
+      changes:
+        - createIndex:
+            indexName: idx_tasks_backend_status
+            tableName: tasks
+            columns:
+              - column: { name: backend_id }
+              - column: { name: status }
+        - createIndex:
+            indexName: idx_tasks_due_at
+            tableName: tasks
+            columns:
+              - column: { name: due_at }
+      rollback:
+        - dropIndex:
+            indexName: idx_tasks_backend_status
+            tableName: tasks
+        - dropIndex:
+            indexName: idx_tasks_due_at
+            tableName: tasks

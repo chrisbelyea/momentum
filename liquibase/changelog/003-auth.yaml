@@ -1,0 +1,42 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-auth
+      author: copilot
+      changes:
+        - createTable:
+            tableName: credentials
+            columns:
+              - column: { name: user_id, type: BIGINT, constraints: { nullable: false } }
+              - column: { name: type, type: VARCHAR(64), constraints: { nullable: false } }
+              - column: { name: secret_hash, type: VARCHAR(255) }
+              - column: { name: created_at, type: TIMESTAMP, defaultValueComputed: CURRENT_TIMESTAMP }
+        - addPrimaryKey:
+            tableName: credentials
+            columnNames: user_id,type
+            constraintName: pk_credentials
+        - addForeignKeyConstraint:
+            baseTableName: credentials
+            baseColumnNames: user_id
+            referencedTableName: users
+            referencedColumnNames: id
+            constraintName: fk_credentials_user
+            onDelete: CASCADE
+        - createTable:
+            tableName: sessions
+            columns:
+              - column: { name: id, type: VARCHAR(128), constraints: { primaryKey: true, nullable: false } }
+              - column: { name: user_id, type: BIGINT, constraints: { nullable: false } }
+              - column: { name: created_at, type: TIMESTAMP, defaultValueComputed: CURRENT_TIMESTAMP }
+              - column: { name: expires_at, type: TIMESTAMP }
+        - addForeignKeyConstraint:
+            baseTableName: sessions
+            baseColumnNames: user_id
+            referencedTableName: users
+            referencedColumnNames: id
+            constraintName: fk_sessions_user
+            onDelete: CASCADE
+      rollback:
+        - dropTable:
+            tableName: sessions
+        - dropTable:
+            tableName: credentials
