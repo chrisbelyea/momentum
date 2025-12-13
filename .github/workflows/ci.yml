@@ -6,6 +6,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+    
+    env:
+      LIQUIBASE_VERSION: 4.27.0
+    
     services:
       postgres:
         image: postgres:16
@@ -35,7 +42,8 @@ jobs:
           LIQUIBASE_PASSWORD: momentum
           LIQUIBASE_DRIVER: org.postgresql.Driver
         run: |
-          curl -sSL https://download.liquibase.com/liquibase.zip -o liquibase.zip
+          set -e
+          curl -sSL https://github.com/liquibase/liquibase/releases/download/v${LIQUIBASE_VERSION}/liquibase-${LIQUIBASE_VERSION}.zip -o liquibase.zip
           unzip -q liquibase.zip -d $HOME/liquibase
           $HOME/liquibase/liquibase --version
           if [ -f liquibase/liquibase.properties ]; then props="--defaultsFile=liquibase/liquibase.properties"; else props=""; fi
