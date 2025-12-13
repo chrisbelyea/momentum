@@ -4,8 +4,61 @@ on:
   push:
     branches: [ main ]
 jobs:
-  build:
+  liquibase-sqlite:
     runs-on: ubuntu-latest
+    if: ${{ hashFiles('liquibase/changelog/**') != '' }}
+    
+    permissions:
+      contents: read
+    
+    env:
+      LIQUIBASE_VERSION: 4.27.0
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Java (for Liquibase)
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+      
+      - name: Install Liquibase
+        run: |
+          set -e
+          curl -sSL https://github.com/liquibase/liquibase/releases/download/v${LIQUIBASE_VERSION}/liquibase-${LIQUIBASE_VERSION}.zip -o liquibase.zip
+          unzip -q liquibase.zip -d $HOME/liquibase
+          $HOME/liquibase/liquibase --version
+      
+      - name: Download SQLite JDBC Driver
+        run: |
+          set -e
+          curl -sSL https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/3.45.0.0/sqlite-jdbc-3.45.0.0.jar -o $HOME/liquibase/lib/sqlite-jdbc.jar
+      
+      - name: Validate Liquibase with SQLite
+        run: |
+          set -e
+          $HOME/liquibase/liquibase \
+            --defaultsFile=liquibase/liquibase.properties \
+            validate
+      
+      - name: Update Liquibase with SQLite
+        run: |
+          set -e
+          $HOME/liquibase/liquibase \
+            --defaultsFile=liquibase/liquibase.properties \
+            update
+  
+  liquibase-postgresql:
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('liquibase/changelog/**') != '' }}
+    
+    permissions:
+      contents: read
+    
+    env:
+      LIQUIBASE_VERSION: 4.27.0
+    
     services:
       postgres:
         image: postgres:16
@@ -21,27 +74,54 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
+    
     steps:
       - uses: actions/checkout@v4
+      
       - name: Setup Java (for Liquibase)
         uses: actions/setup-java@v4
         with:
           distribution: "temurin"
           java-version: "21"
-      - name: Validate Liquibase changelogs
-        if: ${{ hashFiles('liquibase/changelog/**') != '' }}
-        env:
-          LIQUIBASE_URL: jdbc:postgresql://localhost:5432/momentum
-          LIQUIBASE_USERNAME: momentum
-          LIQUIBASE_PASSWORD: momentum
-          LIQUIBASE_DRIVER: org.postgresql.Driver
+      
+      - name: Install Liquibase
         run: |
-          curl -sSL https://github.com/liquibase/liquibase/releases/download/v4.27.0/liquibase-4.27.0.zip -o liquibase.zip
+          set -e
+          curl -sSL https://github.com/liquibase/liquibase/releases/download/v${LIQUIBASE_VERSION}/liquibase-${LIQUIBASE_VERSION}.zip -o liquibase.zip
           unzip -q liquibase.zip -d $HOME/liquibase
           $HOME/liquibase/liquibase --version
-          if [ -f liquibase/liquibase.properties ]; then props="--defaultsFile=liquibase/liquibase.properties"; else props=""; fi
-          $HOME/liquibase/liquibase $props validate || (echo "Liquibase validate failed" && exit 1)
-          $HOME/liquibase/liquibase $props update || (echo "Liquibase update failed" && exit 1)
+      
+      - name: Validate Liquibase with PostgreSQL
+        run: |
+          set -e
+          $HOME/liquibase/liquibase \
+            --defaultsFile=liquibase/liquibase.properties \
+            --url=jdbc:postgresql://localhost:5432/momentum \
+            --username=momentum \
+            --password=momentum \
+            --driver=org.postgresql.Driver \
+            validate
+      
+      - name: Update Liquibase with PostgreSQL
+        run: |
+          set -e
+          $HOME/liquibase/liquibase \
+            --defaultsFile=liquibase/liquibase.properties \
+            --url=jdbc:postgresql://localhost:5432/momentum \
+            --username=momentum \
+            --password=momentum \
+            --driver=org.postgresql.Driver \
+            update
+  
+  lint-and-test:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+    
+    steps:
+      - uses: actions/checkout@v4
+      
       - name: Lint & Tests
         run: |
           echo "TODO: add project-specific lint/test commands"
