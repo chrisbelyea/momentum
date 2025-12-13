@@ -340,19 +340,19 @@ Users can access conflict history to:
 #### Idempotent Operations
 
 All sync operations are designed to be idempotent—they can be safely retried without duplicating data or causing inconsistencies:
-- Task creates use stable UIDs (UUID v4 generated client-side on task creation); duplicate creates are detected and ignored
+- Task creates use stable UIDs (UUID v4 generated client-side on task creation using cryptographically secure random number generators; UUID v4's 122 random bits ensure negligible collision probability even with millions of tasks across distributed clients); duplicate creates are detected and ignored
 - Task updates are applied based on modification timestamp comparison
 - Task deletes are tracked by UID; redundant deletes are no-ops
 - Sync tokens are updated atomically only after successful sync completion
 
 #### Error Handling
 
-The sync orchestrator handles various error conditions gracefully:
+The sync orchestrator handles various error conditions gracefully. Retry limits and backoff parameters are configurable; defaults shown below are chosen to balance responsiveness with server load:
 
-- **Network errors**: Retry with exponential backoff (initial: 1s, max: 5 minutes, up to 5 attempts); preserve local state
+- **Network errors**: Retry with exponential backoff (default initial: 1s, max: 5 minutes, up to 5 attempts); preserve local state
 - **Authentication failures**: Alert user; pause sync until credentials are refreshed
 - **Rate limiting**: Respect rate limit headers; schedule retry after cooldown period (or use exponential backoff if no headers)
-- **Backend unavailable**: Temporary disable backend; retry periodically with exponential backoff (initial: 1 minute, max: 1 hour, up to 10 attempts before requiring manual intervention)
+- **Backend unavailable**: Temporary disable backend; retry periodically with exponential backoff (default initial: 1 minute, max: 1 hour, up to 10 attempts before requiring manual intervention)
 - **Data validation errors**: Log error; skip invalid task; continue with remaining tasks
 - **Partial sync failures**: Commit successful changes; preserve sync token for resumed incremental sync
 
