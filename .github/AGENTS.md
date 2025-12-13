@@ -13,6 +13,9 @@ Agents assist by turning the spec into Issues, scaffolding code, writing migrati
 - Commits: concise subject, reference Issue (e.g., `#123`).
 - Tests: include unit/integration where applicable.
 - Docs: update spec/design/README when behavior changes.
+- Apply appropriate labels to Issues/PRs (`type:*`, `area:*`, `priority:*`).
+- Apply appropriate milestones to issues and pull requests. A pull request's milestone should match that of the issue it is implementing.
+- Apply appropriate project board columns to issues and pull requests. A pull request's project board column should match that of the issue it is implementing.
 
 ## Workflows
 - Spec → Issues (Agent-standardized):
@@ -28,6 +31,7 @@ Agents assist by turning the spec into Issues, scaffolding code, writing migrati
 - If blocked by missing information or unsafe operations, open a `type:task` Issue labeled `blocked` and request human input.
 
 ## Agent Prompts (Canonical)
+(refer to docs/agents/prompts.md for additional details)
 - Create Issues from Spec:
 	"Create GitHub Issues from requirements/specification.md for Phase 1. Use the Feature Issue Form, apply labels (type:feature, area:web/backend/sync, priority:P1), add cards to the Project board (Todo), and include acceptance criteria referencing spec sections."
 - Sync Issues with Updated Spec:
