@@ -29,11 +29,6 @@ jobs:
           unzip -q liquibase.zip -d $HOME/liquibase
           $HOME/liquibase/liquibase --version
       
-      - name: Download SQLite JDBC Driver
-        run: |
-          set -e
-          curl -sSL https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/3.45.0.0/sqlite-jdbc-3.45.0.0.jar -o $HOME/liquibase/lib/sqlite-jdbc.jar
-      
       - name: Validate with SQLite
         run: |
           set -e
