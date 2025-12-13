@@ -166,6 +166,208 @@ graph TB
 - Preserves metadata during transfers between backends
 - Handles schema differences and limitations
 
+## Sync Orchestration
+
+The Sync Orchestrator is responsible for keeping tasks synchronized between the internal CalDAV server and external backends. It implements incremental synchronization and robust conflict resolution to ensure data consistency and reliability.
+
+### Incremental Sync Strategy
+
+Momentum uses incremental synchronization to minimize network traffic and improve performance. Rather than fetching all tasks on every sync, only changes since the last successful sync are transferred.
+
+#### Sync State Tracking
+
+For each backend, the system maintains:
+- **Last sync timestamp**: When the last successful sync completed
+- **Sync token/checkpoint**: Backend-specific cursor or ETag for incremental queries
+- **Entity version map**: Mapping of task UIDs to their last-known modification timestamps
+
+#### Sync Process
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API
+    participant Sync as Sync Orchestrator
+    participant Storage as Data Storage
+    participant Backend as External Backend
+    
+    Client->>API: Request sync for backend
+    API->>Sync: Initiate sync
+    Sync->>Storage: Load sync state (last token, timestamp)
+    
+    alt First sync (no state)
+        Sync->>Backend: Fetch all tasks
+    else Incremental sync
+        Sync->>Backend: Fetch changes since last sync token
+    end
+    
+    Backend-->>Sync: Return changed tasks + new sync token
+    
+    Sync->>Sync: Detect conflicts (compare timestamps)
+    
+    alt No conflicts
+        Sync->>Storage: Update tasks
+        Sync->>Storage: Save new sync state
+    else Conflicts detected
+        Sync->>Sync: Apply conflict resolution policy
+        Sync->>Storage: Update tasks with resolution
+        Sync->>Storage: Save new sync state
+        Sync->>Storage: Log conflict events
+    end
+    
+    Sync-->>API: Sync complete (status + conflicts)
+    API-->>Client: Return sync result
+```
+
+#### Sync Triggers
+
+Synchronization can be triggered by:
+- **Manual**: User explicitly requests sync via UI
+- **Periodic**: Scheduled background sync (configurable interval, default 15 minutes)
+- **Push notification**: Backend-initiated webhook or push notification (when supported)
+- **On-connect**: When backend connection is first established or restored
+- **After local change**: Immediate push of local changes to backend (optional, configurable)
+
+#### Bidirectional Sync
+
+Sync operates bidirectionally to ensure changes flow in both directions:
+
+1. **Pull phase**: Fetch changes from external backend to internal CalDAV
+2. **Push phase**: Send local changes from internal CalDAV to external backend
+3. **Reconciliation**: Resolve any conflicts that arise from concurrent modifications
+
+### Conflict Resolution Policies
+
+Conflicts occur when the same task is modified in multiple locations between syncs. Momentum detects conflicts by comparing modification timestamps and ETags.
+
+#### Conflict Detection
+
+A conflict is detected when:
+- Local modification timestamp > last sync timestamp **AND**
+- Remote modification timestamp > last sync timestamp **AND**
+- Local and remote task versions differ
+
+#### Resolution Strategies
+
+Momentum supports multiple conflict resolution strategies, configurable per backend:
+
+##### 1. Last-Write-Wins (Default)
+- Compare modification timestamps
+- The version with the most recent timestamp wins
+- Older version is preserved in conflict history
+- **Use case**: Default for most backends; simple and predictable
+
+##### 2. Server-Wins
+- Remote backend version always takes precedence
+- Local changes are discarded (but logged)
+- **Use case**: When external backend is authoritative (e.g., shared team calendars)
+
+##### 3. Client-Wins
+- Local internal CalDAV version takes precedence
+- Remote changes are discarded (but logged)
+- **Use case**: When user prefers local edits to override external sources
+
+##### 4. Manual Resolution
+- Conflict is flagged for user review
+- Both versions are preserved
+- User chooses which version to keep or manually merges changes
+- **Use case**: Critical tasks where data loss is unacceptable
+
+##### 5. Field-Level Merge (Advanced)
+- Attempt to merge non-conflicting field changes
+- If same field modified in both versions, fall back to last-write-wins for that field
+- **Use case**: Complex scenarios with multiple concurrent editors
+
+#### Conflict Resolution Flow
+
+```mermaid
+sequenceDiagram
+    participant Sync as Sync Orchestrator
+    participant Storage as Data Storage
+    participant Policy as Resolution Policy
+    participant History as Conflict History
+    
+    Sync->>Sync: Detect conflict (task modified in both locations)
+    Sync->>Storage: Load local version (with timestamp)
+    Sync->>Storage: Load remote version (with timestamp)
+    
+    Sync->>Policy: Apply resolution strategy
+    
+    alt Last-Write-Wins
+        Policy->>Policy: Compare timestamps
+        Policy-->>Sync: Newer version wins
+    else Server-Wins
+        Policy-->>Sync: Remote version wins
+    else Client-Wins
+        Policy-->>Sync: Local version wins
+    else Manual Resolution
+        Policy-->>Sync: Flag for user review
+        Sync->>Storage: Store both versions
+        Sync->>Storage: Create conflict record
+    else Field-Level Merge
+        Policy->>Policy: Merge non-conflicting fields
+        Policy->>Policy: Apply last-write-wins to conflicting fields
+        Policy-->>Sync: Merged version
+    end
+    
+    Sync->>History: Log conflict event (both versions, resolution)
+    Sync->>Storage: Save resolved version
+    Sync->>Storage: Update sync state
+```
+
+#### Conflict History
+
+All conflicts are logged for audit and recovery purposes:
+- **Timestamp**: When conflict occurred
+- **Task UID**: Which task conflicted
+- **Local version**: Full snapshot of local task state
+- **Remote version**: Full snapshot of remote task state
+- **Resolution applied**: Which strategy was used
+- **Winning version**: Final resolved state
+- **User notified**: Whether user was alerted (for manual resolution)
+
+Users can access conflict history to:
+- Review past conflicts
+- Recover discarded changes if needed
+- Understand sync behavior
+- Adjust resolution policies
+
+### Idempotency and Error Handling
+
+#### Idempotent Operations
+
+All sync operations are designed to be idempotent—they can be safely retried without duplicating data or causing inconsistencies:
+- Task creates use stable UIDs; duplicate creates are detected and ignored
+- Task updates are applied based on modification timestamp comparison
+- Task deletes are tracked by UID; redundant deletes are no-ops
+- Sync tokens are updated atomically only after successful sync completion
+
+#### Error Handling
+
+The sync orchestrator handles various error conditions gracefully:
+
+- **Network errors**: Retry with exponential backoff; preserve local state
+- **Authentication failures**: Alert user; pause sync until credentials are refreshed
+- **Rate limiting**: Respect rate limit headers; schedule retry after cooldown period
+- **Backend unavailable**: Temporary disable backend; retry periodically with exponential backoff
+- **Data validation errors**: Log error; skip invalid task; continue with remaining tasks
+- **Partial sync failures**: Commit successful changes; preserve sync token for resumed incremental sync
+
+#### Transactional Guarantees
+
+- Sync state updates are transactional: either all changes commit or none do
+- If sync fails mid-operation, the system rolls back to the last known good state
+- The next sync attempt resumes from the last successful checkpoint
+
+### Performance Considerations
+
+- **Batch operations**: Group multiple task updates into single backend API calls when possible
+- **Parallel syncing**: Multiple backends can sync concurrently (with per-backend rate limiting)
+- **Delta encoding**: Only transmit changed fields when backend supports partial updates
+- **Compression**: Enable gzip/deflate compression for API requests and responses
+- **Connection pooling**: Reuse HTTP connections across sync operations
+- **Lazy conflict detection**: Only check for conflicts on tasks that were locally modified
+
 ## Design Principles
 
 ### 1. Standards-First
