@@ -165,6 +165,7 @@ graph TB
 - Internal mapping layer translates between VTODO and backend-specific formats
 - Preserves metadata during transfers between backends
 - Handles schema differences and limitations
+- Complete mapping specification: [VTODO Mapping](vtodo-mapping.md)
 
 ## Design Principles
 
