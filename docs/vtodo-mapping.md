@@ -25,7 +25,7 @@ Momentum's internal task model represents the essential fields needed for kanban
 | `status` | Enum | Yes | Current task status |
 | `dueDate` | DateTime | No | When the task is due |
 | `startDate` | DateTime | No | When the task should start |
-| `priority` | Integer | No | Task priority level (1-9) |
+| `priority` | Integer | No | Task priority level (0-9) |
 | `tags` | String[] | No | Labels/categories for the task |
 | `completedDate` | DateTime | No | When the task was completed |
 | `createdDate` | DateTime | Yes | When the task was created |
@@ -317,7 +317,6 @@ END:VTODO
 BEGIN:VTODO
 UID:550e8400-e29b-41d4-a716-446655440000
 DTSTAMP:20231201T120000Z
-CREATED:20231201T120000Z
 LAST-MODIFIED:20231205T153000Z
 SEQUENCE:3
 SUMMARY:Implement user authentication
