@@ -62,7 +62,9 @@
             baseColumnNames="user_id"
             constraintName="fk_backends_user"
             referencedTableName="users"
-            referencedColumnNames="id"/>
+            referencedColumnNames="id"
+            onDelete="CASCADE"
+            onUpdate="RESTRICT"/>
         <createIndex tableName="backends" indexName="idx_backends_user_id">
             <column name="user_id"/>
         </createIndex>
@@ -116,7 +118,9 @@
             baseColumnNames="backend_id"
             constraintName="fk_tasks_backend"
             referencedTableName="backends"
-            referencedColumnNames="id"/>
+            referencedColumnNames="id"
+            onDelete="CASCADE"
+            onUpdate="RESTRICT"/>
         <createIndex tableName="tasks" indexName="idx_tasks_backend_id">
             <column name="backend_id"/>
         </createIndex>
