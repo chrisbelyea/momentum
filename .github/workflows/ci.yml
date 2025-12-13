@@ -23,8 +23,8 @@ jobs:
       run: |
         set -e
         curl -sSL https://github.com/liquibase/liquibase/releases/download/v${LIQUIBASE_VERSION}/liquibase-${LIQUIBASE_VERSION}.zip -o liquibase.zip
-        unzip liquibase.zip -d liquibase
-        echo "$PWD/liquibase" >> $GITHUB_PATH
+        unzip liquibase.zip -d liquibase-install
+        echo "$PWD/liquibase-install" >> $GITHUB_PATH
 
     - name: Verify Liquibase Installation
       run: liquibase --version
