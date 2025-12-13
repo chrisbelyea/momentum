@@ -1,1 +1,7 @@
+# Liquibase temporary installation (for local testing)
+liquibase-install/
+liquibase.zip
 
+# Database files (for local testing)
+*.db
+*.db-journal

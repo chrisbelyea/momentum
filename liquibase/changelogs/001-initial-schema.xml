@@ -39,7 +39,7 @@
                 <constraints primaryKey="true" nullable="false"/>
             </column>
             <column name="user_id" type="VARCHAR(36)">
-                <constraints nullable="false" foreignKeyName="fk_backends_user" references="users(id)"/>
+                <constraints nullable="false"/>
             </column>
             <column name="backend_type" type="VARCHAR(50)">
                 <constraints nullable="false"/>
@@ -57,6 +57,12 @@
                 <constraints nullable="false"/>
             </column>
         </createTable>
+        <addForeignKeyConstraint 
+            baseTableName="backends" 
+            baseColumnNames="user_id"
+            constraintName="fk_backends_user"
+            referencedTableName="users"
+            referencedColumnNames="id"/>
         <createIndex tableName="backends" indexName="idx_backends_user_id">
             <column name="user_id"/>
         </createIndex>
@@ -69,7 +75,7 @@
                 <constraints primaryKey="true" nullable="false"/>
             </column>
             <column name="backend_id" type="VARCHAR(36)">
-                <constraints nullable="false" foreignKeyName="fk_tasks_backend" references="backends(id)"/>
+                <constraints nullable="false"/>
             </column>
             <column name="external_id" type="VARCHAR(255)">
                 <constraints nullable="true"/>
@@ -105,6 +111,12 @@
                 <constraints nullable="false"/>
             </column>
         </createTable>
+        <addForeignKeyConstraint 
+            baseTableName="tasks" 
+            baseColumnNames="backend_id"
+            constraintName="fk_tasks_backend"
+            referencedTableName="backends"
+            referencedColumnNames="id"/>
         <createIndex tableName="tasks" indexName="idx_tasks_backend_id">
             <column name="backend_id"/>
         </createIndex>
