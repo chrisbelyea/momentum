@@ -4,7 +4,51 @@ on:
     paths:
       - 'liquibase/**'
 jobs:
-  validate:
+  validate-sqlite:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+    
+    env:
+      LIQUIBASE_VERSION: 4.27.0
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+      
+      - name: Install Liquibase
+        run: |
+          set -e
+          curl -sSL https://github.com/liquibase/liquibase/releases/download/v${LIQUIBASE_VERSION}/liquibase-${LIQUIBASE_VERSION}.zip -o liquibase.zip
+          unzip -q liquibase.zip -d $HOME/liquibase
+          $HOME/liquibase/liquibase --version
+      
+      - name: Download SQLite JDBC Driver
+        run: |
+          set -e
+          curl -sSL https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/3.45.0.0/sqlite-jdbc-3.45.0.0.jar -o $HOME/liquibase/lib/sqlite-jdbc.jar
+      
+      - name: Validate with SQLite
+        run: |
+          set -e
+          $HOME/liquibase/liquibase \
+            --defaultsFile=liquibase/liquibase.properties \
+            validate
+      
+      - name: Update with SQLite
+        run: |
+          set -e
+          $HOME/liquibase/liquibase \
+            --defaultsFile=liquibase/liquibase.properties \
+            update
+  
+  validate-postgresql:
     runs-on: ubuntu-latest
     
     permissions:
@@ -27,23 +71,41 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
+    
     steps:
       - uses: actions/checkout@v4
+      
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: "temurin"
           java-version: "21"
-      - name: Liquibase validate
-        env:
-          LIQUIBASE_URL: jdbc:postgresql://localhost:5432/momentum
-          LIQUIBASE_USERNAME: momentum
-          LIQUIBASE_PASSWORD: momentum
-          LIQUIBASE_DRIVER: org.postgresql.Driver
+      
+      - name: Install Liquibase
         run: |
           set -e
           curl -sSL https://github.com/liquibase/liquibase/releases/download/v${LIQUIBASE_VERSION}/liquibase-${LIQUIBASE_VERSION}.zip -o liquibase.zip
           unzip -q liquibase.zip -d $HOME/liquibase
-          if [ -f liquibase/liquibase.properties ]; then props="--defaultsFile=liquibase/liquibase.properties"; else props=""; fi
-          $HOME/liquibase/liquibase $props validate
-          $HOME/liquibase/liquibase $props update
+          $HOME/liquibase/liquibase --version
+      
+      - name: Validate with PostgreSQL
+        run: |
+          set -e
+          $HOME/liquibase/liquibase \
+            --defaultsFile=liquibase/liquibase.properties \
+            --url=jdbc:postgresql://localhost:5432/momentum \
+            --username=momentum \
+            --password=momentum \
+            --driver=org.postgresql.Driver \
+            validate
+      
+      - name: Update with PostgreSQL
+        run: |
+          set -e
+          $HOME/liquibase/liquibase \
+            --defaultsFile=liquibase/liquibase.properties \
+            --url=jdbc:postgresql://localhost:5432/momentum \
+            --username=momentum \
+            --password=momentum \
+            --driver=org.postgresql.Driver \
+            update
