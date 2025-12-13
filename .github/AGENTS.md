@@ -24,7 +24,8 @@ Agents assist by turning the spec into Issues, scaffolding code, writing migrati
 	- Apply labels: `type:*`, `area:*`, `priority:*` and add cards to the GitHub Project board in `Todo`.
 	- Set Phase milestones (Phase 1–3) based on the roadmap.
 	- Cross-link spec sections in the Issue body for traceability.
-- PR Review: ensure linked Issue, tests, docs, CI passing; enforce security and portability constraints.
+- PR Creation: Create PRs in draft status. Change the PRs to ready-for-review status (not draft) to signal completion and readiness for human review. Ensure the PR title is clear and non-WIP.
+- PR Review: ensure linked Issue, tests, docs, CI passing; enforce security and portability constraints. The PR should be linked to its Issue, have appropriate labels and milestone matching the Issue, and be added to the Project board in the corresponding column.
 - Liquibase: validate changeLogs in CI; include rollback where feasible; block merges on validation failures.
 
 ## Escalation

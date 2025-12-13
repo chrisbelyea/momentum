@@ -56,7 +56,7 @@ jobs:
     
     permissions:
       contents: read
-    
+
     env:
       LB_VERSION: 4.27.0
     
@@ -121,8 +121,46 @@ jobs:
       contents: read
     
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Lint & Tests
-        run: |
-          echo "TODO: add project-specific lint/test commands"
+    - uses: actions/checkout@v3
+
+    - name: Install Liquibase
+      run: |
+        set -e
+        curl -sSL https://github.com/liquibase/liquibase/releases/download/v${LIQUIBASE_VERSION}/liquibase-${LIQUIBASE_VERSION}.zip -o liquibase.zip
+        unzip liquibase.zip -d liquibase-install
+        echo "$PWD/liquibase-install" >> $GITHUB_PATH
+
+    - name: Verify Liquibase Installation
+      run: liquibase --version
+
+    - name: Validate Liquibase Changesets
+      run: |
+        set -e
+        cd liquibase
+        # Use in-memory H2 database for validation (H2 is bundled with Liquibase)
+        # This validates changelog structure, syntax, and semantic correctness
+        liquibase \
+          --changeLogFile=changelog.xml \
+          --url="jdbc:h2:mem:validation" \
+          --driver=org.h2.Driver \
+          --username=sa \
+          --password= \
+          validate
+          
+    - name: Validate Repository Structure
+      run: |
+        set -e
+        echo "Validating required documentation files..."
+        test -f README.md || (echo "ERROR: README.md is missing" && exit 1)
+        test -f .github/CONTRIBUTING.md || (echo "ERROR: CONTRIBUTING.md is missing" && exit 1)
+        test -f requirements/specification.md || (echo "ERROR: specification.md is missing" && exit 1)
+        test -f requirements/vision.md || (echo "ERROR: vision.md is missing" && exit 1)
+        test -f docs/design-overview.md || (echo "ERROR: design-overview.md is missing" && exit 1)
+        echo "✓ All required documentation files present"
+
+        echo "Validating directory structure..."
+        test -d scripts/db || (echo "ERROR: scripts/db directory is missing" && exit 1)
+        test -d .github/workflows || (echo "ERROR: .github/workflows directory is missing" && exit 1)
+        echo "✓ Directory structure is valid"
+
+        echo "CI validation complete!"
