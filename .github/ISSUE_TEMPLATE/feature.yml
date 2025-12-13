@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest a new feature aligned with the spec
+title: "feat: <short title>"
+labels:
+  - type:feature
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Link relevant sections of [requirements/specification.md](../../requirements/specification.md).
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: What should be built?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why is this important? Any constraints?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: Bullet list of outcomes/tests that must pass
+      placeholder: "Given/When/Then or concrete checks"
+    validations:
+      required: true

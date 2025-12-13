@@ -1,0 +1,33 @@
+name: Bug report
+description: Report a bug with steps to reproduce
+title: "fix: <short title>"
+labels:
+  - type:bug
+  - triage
+body:
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, browser/app version, backend
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Step-by-step reproduction
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
