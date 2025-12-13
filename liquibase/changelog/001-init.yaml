@@ -1,0 +1,85 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-init-users
+      author: copilot
+      changes:
+        - createTable:
+            tableName: users
+            columns:
+              - column: { name: id, type: BIGINT, autoIncrement: true, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: email, type: VARCHAR(255), constraints: { nullable: false, unique: true } }
+              - column: { name: created_at, type: TIMESTAMP, defaultValueComputed: CURRENT_TIMESTAMP }
+      rollback:
+        - dropTable:
+            tableName: users
+  - changeSet:
+      id: 001-init-backends
+      author: copilot
+      changes:
+        - createTable:
+            tableName: backends
+            columns:
+              - column: { name: id, type: BIGINT, autoIncrement: true, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: user_id, type: BIGINT, constraints: { nullable: false } }
+              - column: { name: type, type: VARCHAR(64), constraints: { nullable: false } }
+              - column: { name: name, type: VARCHAR(128), constraints: { nullable: false } }
+              - column: { name: config_json, type: CLOB }
+        - addForeignKeyConstraint:
+            baseTableName: backends
+            baseColumnNames: user_id
+            referencedTableName: users
+            referencedColumnNames: id
+            constraintName: fk_backends_user
+            onDelete: CASCADE
+      rollback:
+        - dropTable:
+            tableName: backends
+  - changeSet:
+      id: 001-init-tasks
+      author: copilot
+      changes:
+        - createTable:
+            tableName: tasks
+            columns:
+              - column: { name: id, type: BIGINT, autoIncrement: true, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: backend_id, type: BIGINT, constraints: { nullable: false } }
+              - column: { name: external_id, type: VARCHAR(255) }
+              - column: { name: title, type: VARCHAR(512), constraints: { nullable: false } }
+              - column: { name: description, type: CLOB }
+              - column: { name: status, type: VARCHAR(64), constraints: { nullable: false } }
+              - column: { name: priority, type: INTEGER }
+              - column: { name: due_at, type: TIMESTAMP }
+              - column: { name: tags_json, type: CLOB }
+              - column: { name: created_at, type: TIMESTAMP, defaultValueComputed: CURRENT_TIMESTAMP }
+              - column: { name: updated_at, type: TIMESTAMP }
+        - addForeignKeyConstraint:
+            baseTableName: tasks
+            baseColumnNames: backend_id
+            referencedTableName: backends
+            referencedColumnNames: id
+            constraintName: fk_tasks_backend
+            onDelete: CASCADE
+      rollback:
+        - dropTable:
+            tableName: tasks
+  - changeSet:
+      id: 001-init-sync-state
+      author: copilot
+      changes:
+        - createTable:
+            tableName: sync_state
+            columns:
+              - column: { name: id, type: BIGINT, autoIncrement: true, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: backend_id, type: BIGINT, constraints: { nullable: false, unique: true } }
+              - column: { name: checkpoint, type: VARCHAR(255) }
+              - column: { name: last_run_at, type: TIMESTAMP }
+        - addForeignKeyConstraint:
+            baseTableName: sync_state
+            baseColumnNames: backend_id
+            referencedTableName: backends
+            referencedColumnNames: id
+            constraintName: fk_sync_backend
+            onDelete: CASCADE
+      rollback:
+        - dropTable:
+            tableName: sync_state
