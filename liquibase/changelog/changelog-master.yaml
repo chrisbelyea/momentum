@@ -2,6 +2,6 @@ databaseChangeLog:
   - include:
       file: liquibase/changelog/001-init.yaml
   - include:
-      file: liquibase/changelog/002-indexes.yaml
-  - include:
       file: liquibase/changelog/003-auth.yaml
+  - include:
+      file: liquibase/changelog/002-indexes.yaml
