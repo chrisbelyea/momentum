@@ -11,4 +11,4 @@ fi
 
 cmd=${1:-update}
 
-$LB_BIN --defaultsFile="$DEFAULTS_FILE" "$cmd"
+$LB_BIN --defaultsFile="$DEFAULTS_FILE" "$@"

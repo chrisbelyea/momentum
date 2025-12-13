@@ -12,7 +12,7 @@ jobs:
       contents: read
     
     env:
-      LIQUIBASE_VERSION: 4.27.0
+      LB_VERSION: 4.27.0
     
     steps:
       - uses: actions/checkout@v4
@@ -26,14 +26,15 @@ jobs:
       - name: Install Liquibase
         run: |
           set -e
-          curl -sSL https://github.com/liquibase/liquibase/releases/download/v${LIQUIBASE_VERSION}/liquibase-${LIQUIBASE_VERSION}.zip -o liquibase.zip
+          curl -sSL https://github.com/liquibase/liquibase/releases/download/v${LB_VERSION}/liquibase-${LB_VERSION}.zip -o liquibase.zip
           unzip -q liquibase.zip -d $HOME/liquibase
           $HOME/liquibase/liquibase --version
       
-      - name: Download SQLite JDBC Driver
+      - name: Download SLF4J libraries for SQLite
         run: |
           set -e
-          curl -sSL https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/3.45.0.0/sqlite-jdbc-3.45.0.0.jar -o $HOME/liquibase/lib/sqlite-jdbc.jar
+          curl -sSL https://repo1.maven.org/maven2/org/slf4j/slf4j-api/2.0.9/slf4j-api-2.0.9.jar -o $HOME/liquibase/internal/lib/slf4j-api-2.0.9.jar
+          curl -sSL https://repo1.maven.org/maven2/org/slf4j/slf4j-simple/2.0.9/slf4j-simple-2.0.9.jar -o $HOME/liquibase/internal/lib/slf4j-simple-2.0.9.jar
       
       - name: Validate Liquibase with SQLite
         run: |
@@ -57,12 +58,13 @@ jobs:
       contents: read
     
     env:
-      LIQUIBASE_VERSION: 4.27.0
+      LB_VERSION: 4.27.0
     
     services:
       postgres:
         image: postgres:16
         env:
+          # Ephemeral credentials for CI testing only - never used in production
           POSTGRES_USER: momentum
           POSTGRES_PASSWORD: momentum
           POSTGRES_DB: momentum
@@ -86,7 +88,7 @@ jobs:
       - name: Install Liquibase
         run: |
           set -e
-          curl -sSL https://github.com/liquibase/liquibase/releases/download/v${LIQUIBASE_VERSION}/liquibase-${LIQUIBASE_VERSION}.zip -o liquibase.zip
+          curl -sSL https://github.com/liquibase/liquibase/releases/download/v${LB_VERSION}/liquibase-${LB_VERSION}.zip -o liquibase.zip
           unzip -q liquibase.zip -d $HOME/liquibase
           $HOME/liquibase/liquibase --version
       
