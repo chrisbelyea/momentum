@@ -3,6 +3,7 @@ package caldav
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
@@ -129,12 +130,12 @@ func ValidateCertificate(certPath string) error {
 		return fmt.Errorf("failed to read certificate: %w", err)
 	}
 
-	block, _ := parsePEMBlock(certData)
+	block, _ := pem.Decode(certData)
 	if block == nil {
 		return fmt.Errorf("failed to parse certificate PEM")
 	}
 
-	cert, err := x509.ParseCertificate(block)
+	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
 		return fmt.Errorf("failed to parse certificate: %w", err)
 	}
@@ -156,32 +157,4 @@ func ValidateCertificate(certPath string) error {
 	}
 
 	return nil
-}
-
-// parsePEMBlock extracts the first PEM block from data
-func parsePEMBlock(data []byte) ([]byte, []byte) {
-	// Simple PEM parsing - in production, use encoding/pem package
-	// This is a placeholder for the actual implementation
-	start := 0
-	end := len(data)
-	
-	for i := 0; i < len(data)-27; i++ {
-		if string(data[i:i+27]) == "-----BEGIN CERTIFICATE-----" {
-			start = i + 27
-			break
-		}
-	}
-	
-	for i := start; i < len(data)-25; i++ {
-		if string(data[i:i+25]) == "-----END CERTIFICATE-----" {
-			end = i
-			break
-		}
-	}
-	
-	if start >= end {
-		return nil, data
-	}
-	
-	return data[start:end], data[end:]
 }
