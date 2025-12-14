@@ -110,8 +110,8 @@ func (r *TaskRepository) Get(id int) (*models.Task, error) {
 // Create creates a new task
 func (r *TaskRepository) Create(task *models.Task) error {
 	// Set timestamps
-	task.CreatedAt = time.Now()
 	now := time.Now()
+	task.CreatedAt = now
 	task.UpdatedAt = &now
 
 	query := `
