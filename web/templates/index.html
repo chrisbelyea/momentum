@@ -312,7 +312,9 @@
             })
             .then(response => {
                 if (!response.ok) {
-                    throw new Error('Failed to update task status');
+                    return response.text().then(text => {
+                        throw new Error(text || 'Failed to update task status');
+                    });
                 }
                 return response.json();
             })
@@ -321,7 +323,9 @@
             })
             .catch(error => {
                 console.error('Error updating task status:', error);
-                alert('Failed to update task status. Please refresh the page.');
+                // Revert the UI change by reloading the page
+                alert('Failed to update task status: ' + error.message + '\nThe page will reload to restore the correct state.');
+                location.reload();
             });
         }
 
@@ -339,13 +343,18 @@
                         emptyState.remove();
                     }
                 } else if (tasks.length === 0) {
-                    // Add empty state if no tasks
-                    const columnType = column.closest('.column').querySelector('.column-header span').textContent;
+                    // Add empty state if no tasks - use data-status attribute
+                    const columnStatus = column.closest('.column').getAttribute('data-status');
                     const emptyDiv = document.createElement('div');
                     emptyDiv.className = 'empty-state';
-                    emptyDiv.textContent = columnType.includes('Todo') ? 'No tasks yet' : 
-                                          columnType.includes('Progress') ? 'No tasks in progress' : 
-                                          'No completed tasks';
+                    
+                    // Map status to friendly text
+                    const statusText = {
+                        'NEEDS-ACTION': 'No tasks yet',
+                        'IN-PROCESS': 'No tasks in progress',
+                        'COMPLETED': 'No completed tasks'
+                    };
+                    emptyDiv.textContent = statusText[columnStatus] || 'No tasks';
                     column.appendChild(emptyDiv);
                 }
             });

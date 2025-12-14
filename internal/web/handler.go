@@ -97,6 +97,18 @@ func (h *Handler) HandleUpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate status value
+	validStatuses := map[string]bool{
+		models.StatusNeedsAction: true,
+		models.StatusInProcess:   true,
+		models.StatusCompleted:   true,
+		models.StatusCancelled:   true,
+	}
+	if !validStatuses[req.Status] {
+		http.Error(w, "Invalid status value", http.StatusBadRequest)
+		return
+	}
+
 	// Get the existing task
 	task, err := h.taskRepo.Get(taskID)
 	if err != nil {

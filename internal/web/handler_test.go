@@ -170,6 +170,55 @@ func TestUpdateStatusMethodNotAllowed(t *testing.T) {
 	}
 }
 
+func TestUpdateStatusInvalidStatus(t *testing.T) {
+	database := setupTestDB(t)
+	defer database.Close()
+
+	taskRepo := db.NewTaskRepository(database)
+
+	// Create a test task
+	task := &models.Task{
+		BackendID: 1,
+		Title:     "Test Task",
+		Status:    models.StatusNeedsAction,
+	}
+	if err := taskRepo.Create(task); err != nil {
+		t.Fatalf("Failed to create task: %v", err)
+	}
+
+	handler := &Handler{
+		taskRepo:  taskRepo,
+		templates: nil,
+	}
+
+	// Try to set an invalid status
+	updateReq := struct {
+		Status string `json:"status"`
+	}{
+		Status: "INVALID-STATUS",
+	}
+	body, _ := json.Marshal(updateReq)
+
+	req := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/tasks/%d/status", task.ID), bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateStatus(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("Expected status 400, got %d", rec.Code)
+	}
+
+	// Verify the task status didn't change
+	taskFromDB, err := taskRepo.Get(task.ID)
+	if err != nil {
+		t.Fatalf("Failed to get task from DB: %v", err)
+	}
+
+	if taskFromDB.Status != models.StatusNeedsAction {
+		t.Errorf("Status should not have changed. Expected '%s', got '%s'", models.StatusNeedsAction, taskFromDB.Status)
+	}
+}
+
 func TestUpdateStatusPersistence(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
