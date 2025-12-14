@@ -5,3 +5,8 @@ liquibase.zip
 # Database files (for local testing)
 *.db
 *.db-journal
+
+# Build artifacts
+/bin/
+/dist/
+momentum-server

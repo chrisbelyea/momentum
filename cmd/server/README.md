@@ -1,0 +1,242 @@
+# Momentum Server
+
+Internal CalDAV server for Momentum task management.
+
+## Features
+
+- **VTODO CRUD Operations**: Create, Read, Update, and Delete tasks locally
+- **RESTful API**: Simple HTTP endpoints for task management
+- **SQLite Storage**: Lightweight, file-based database (PostgreSQL support via existing schema)
+- **Single Executable**: Compiles to a single binary with no external dependencies
+
+## Building
+
+```bash
+# Build the server
+go build -o bin/momentum-server ./cmd/server
+
+# Run tests
+go test ./...
+```
+
+## Running
+
+### Prerequisites
+
+1. Initialize the database using Liquibase:
+
+```bash
+# Set up the database schema
+./scripts/db/migrate.sh update
+```
+
+2. Start the server:
+
+```bash
+# Default: uses momentum.db in current directory, listens on port 8080
+./bin/momentum-server
+
+# Custom configuration via environment variables
+DB_PATH=/path/to/database.db PORT=3000 ./bin/momentum-server
+```
+
+## Configuration
+
+The server is configured via environment variables:
+
+- `DB_PATH`: Path to SQLite database file (default: `momentum.db`)
+- `PORT`: HTTP server port (default: `8080`)
+
+## API Endpoints
+
+### Health Check
+
+```
+GET /health
+```
+
+Returns server health status.
+
+### List Tasks
+
+```
+GET /caldav/tasks?backend_id={backend_id}
+```
+
+Lists all tasks for a given backend.
+
+**Query Parameters:**
+- `backend_id` (required): Backend identifier
+
+**Response:** JSON array of task objects
+
+### Get Task
+
+```
+GET /caldav/tasks/{id}
+```
+
+Retrieves a single task by ID.
+
+**Response:** JSON task object
+
+### Create Task
+
+```
+POST /caldav/tasks
+Content-Type: application/json
+
+{
+  "backend_id": 1,
+  "title": "Task title",
+  "description": "Task description",
+  "status": "NEEDS-ACTION",
+  "priority": 5,
+  "due_at": "2024-12-31T23:59:59Z"
+}
+```
+
+Creates a new task.
+
+**Required Fields:**
+- `backend_id`: Backend identifier (integer)
+- `title`: Task title
+
+**Optional Fields:**
+- `description`: Task description
+- `status`: Task status (default: `NEEDS-ACTION`)
+- `priority`: Priority level (integer)
+- `due_at`: Due date in ISO 8601 format
+- `tags_json`: Tags as JSON string
+- `external_id`: External system identifier
+
+**Response:** Created task object with generated ID
+
+### Update Task
+
+```
+PUT /caldav/tasks/{id}
+Content-Type: application/json
+
+{
+  "backend_id": 1,
+  "title": "Updated title",
+  "status": "IN-PROCESS",
+  "priority": 7
+}
+```
+
+Updates an existing task.
+
+**Required Fields:**
+- `backend_id`: Backend identifier (integer)
+- `title`: Task title
+- `status`: Task status
+
+**Response:** Updated task object
+
+### Delete Task
+
+```
+DELETE /caldav/tasks/{id}
+```
+
+Deletes a task by ID.
+
+**Response:** 204 No Content on success
+
+## Task Statuses
+
+Valid task status values (from VTODO specification):
+
+- `NEEDS-ACTION`: Task needs to be started
+- `IN-PROCESS`: Task is in progress
+- `COMPLETED`: Task is completed
+- `CANCELLED`: Task is cancelled
+
+## Example Usage
+
+```bash
+# Create a backend entry first (you'll need to do this via database or future admin API)
+# For now, use integer IDs for backend_id
+
+# Create a task
+curl -X POST http://localhost:8080/caldav/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "backend_id": 1,
+    "title": "Buy groceries",
+    "status": "NEEDS-ACTION",
+    "priority": 5
+  }'
+
+# List tasks
+curl "http://localhost:8080/caldav/tasks?backend_id=1"
+
+# Get a task
+curl http://localhost:8080/caldav/tasks/{task-id}
+
+# Update a task
+curl -X PUT http://localhost:8080/caldav/tasks/{task-id} \
+  -H "Content-Type: application/json" \
+  -d '{
+    "backend_id": 1,
+    "title": "Buy groceries and cook dinner",
+    "status": "IN-PROCESS",
+    "priority": 8
+  }'
+
+# Delete a task
+curl -X DELETE http://localhost:8080/caldav/tasks/{task-id}
+```
+
+## Architecture
+
+The server follows a layered architecture:
+
+- **cmd/server**: Application entry point and HTTP server setup
+- **internal/caldav**: HTTP handlers and CalDAV protocol logic
+- **internal/db**: Database repository layer
+- **internal/models**: Data models and domain logic
+- **pkg/vtodo**: VTODO parsing and generation (future)
+
+## Testing
+
+Run tests with:
+
+```bash
+# Run all tests
+go test ./...
+
+# Run tests with coverage
+go test ./... -cover
+
+# Run tests with verbose output
+go test ./... -v
+```
+
+## Development
+
+### Code Organization
+
+- Keep HTTP handlers thin - business logic belongs in the repository layer
+- Use the existing `models.Task` struct to maintain consistency with the database schema
+- Follow Go standard project layout conventions
+
+### Future Enhancements
+
+- [ ] Full CalDAV protocol support (PROPFIND, REPORT, etc.)
+- [ ] VTODO serialization/deserialization in `pkg/vtodo`
+- [ ] Authentication and authorization
+- [ ] Sync orchestration with external backends
+- [ ] WebDAV compliance tests
+- [ ] TLS support
+- [ ] Metrics and observability
+
+## References
+
+- [Requirements Specification](../requirements/specification.md) - Sections 4, 9
+- [Design Overview](../docs/design-overview.md) - CalDAV Server section
+- [VTODO Mapping](../docs/vtodo-mapping.md) - Task field mappings
+- [RFC 4791](https://tools.ietf.org/html/rfc4791) - CalDAV specification
+- [RFC 5545](https://tools.ietf.org/html/rfc5545) - iCalendar specification
