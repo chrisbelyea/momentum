@@ -2,6 +2,7 @@ package caldav
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -166,7 +167,7 @@ func (h *Handler) updateTask(w http.ResponseWriter, r *http.Request, taskID int)
 	}
 
 	if err := h.taskRepo.Update(&task); err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if errors.Is(err, db.ErrNotFound) {
 			http.Error(w, "Task not found", http.StatusNotFound)
 			return
 		}
@@ -181,7 +182,7 @@ func (h *Handler) updateTask(w http.ResponseWriter, r *http.Request, taskID int)
 // deleteTask deletes a task
 func (h *Handler) deleteTask(w http.ResponseWriter, r *http.Request, taskID int) {
 	if err := h.taskRepo.Delete(taskID); err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if errors.Is(err, db.ErrNotFound) {
 			http.Error(w, "Task not found", http.StatusNotFound)
 			return
 		}

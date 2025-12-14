@@ -116,10 +116,3 @@ const (
 	StatusCompleted   = "COMPLETED"
 	StatusCancelled   = "CANCELLED"
 )
-
-// SyncStatus constants
-const (
-	SyncStatusSynced  = "synced"
-	SyncStatusPending = "pending"
-	SyncStatusError   = "error"
-)

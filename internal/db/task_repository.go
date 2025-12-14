@@ -186,7 +186,7 @@ func (r *TaskRepository) Update(task *models.Task) error {
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("task not found: %d", task.ID)
+		return ErrNotFound
 	}
 
 	return nil
@@ -207,7 +207,7 @@ func (r *TaskRepository) Delete(id int) error {
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("task not found: %d", id)
+		return ErrNotFound
 	}
 
 	return nil
