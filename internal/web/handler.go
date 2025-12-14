@@ -1,0 +1,121 @@
+package web
+
+import (
+	"encoding/json"
+	"fmt"
+	"html/template"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/chrisbelyea/momentum/internal/db"
+	"github.com/chrisbelyea/momentum/internal/models"
+)
+
+// Handler handles web UI requests
+type Handler struct {
+	taskRepo  *db.TaskRepository
+	templates *template.Template
+}
+
+// NewHandler creates a new web Handler
+func NewHandler(taskRepo *db.TaskRepository) *Handler {
+	return &Handler{
+		taskRepo:  taskRepo,
+		templates: template.Must(template.ParseGlob("web/templates/*.html")),
+	}
+}
+
+// HandleIndex serves the main kanban board page
+func (h *Handler) HandleIndex(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// For now, use backend_id=1 as default
+	// In a real application, this would come from authentication
+	backendID := 1
+
+	tasks, err := h.taskRepo.List(backendID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to load tasks: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Group tasks by status
+	data := struct {
+		TodoTasks       []*models.Task
+		InProgressTasks []*models.Task
+		DoneTasks       []*models.Task
+	}{}
+
+	for _, task := range tasks {
+		switch task.Status {
+		case models.StatusNeedsAction:
+			data.TodoTasks = append(data.TodoTasks, task)
+		case models.StatusInProcess:
+			data.InProgressTasks = append(data.InProgressTasks, task)
+		case models.StatusCompleted:
+			data.DoneTasks = append(data.DoneTasks, task)
+		}
+	}
+
+	if err := h.templates.ExecuteTemplate(w, "index.html", data); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to render template: %v", err), http.StatusInternalServerError)
+		return
+	}
+}
+
+// HandleUpdateStatus updates a task's status via PATCH
+func (h *Handler) HandleUpdateStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract task ID from path
+	taskIDStr := strings.TrimPrefix(r.URL.Path, "/api/tasks/")
+	taskIDStr = strings.TrimSuffix(taskIDStr, "/status")
+	if taskIDStr == "" {
+		http.Error(w, "Task ID is required", http.StatusBadRequest)
+		return
+	}
+
+	taskID, err := strconv.Atoi(taskIDStr)
+	if err != nil {
+		http.Error(w, "Invalid task ID", http.StatusBadRequest)
+		return
+	}
+
+	// Parse request body
+	var req struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Get the existing task
+	task, err := h.taskRepo.Get(taskID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get task: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if task == nil {
+		http.Error(w, "Task not found", http.StatusNotFound)
+		return
+	}
+
+	// Update the status
+	task.Status = req.Status
+
+	if err := h.taskRepo.Update(task); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to update task: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(task)
+}
