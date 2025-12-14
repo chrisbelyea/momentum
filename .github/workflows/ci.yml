@@ -120,8 +120,11 @@ jobs:
     permissions:
       contents: read
     
+    env:
+      LIQUIBASE_VERSION: 4.27.0
+    
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install Liquibase
       run: |
@@ -164,3 +167,52 @@ jobs:
         echo "✓ Directory structure is valid"
 
         echo "CI validation complete!"
+  
+  build-and-test-go:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+        cache: true
+    
+    - name: Verify Go Installation
+      run: go version
+    
+    - name: Download Go Dependencies
+      run: go mod download
+    
+    - name: Verify Go Dependencies
+      run: go mod verify
+    
+    - name: Run Go Tests
+      run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+    
+    - name: Display Test Coverage
+      run: go tool cover -func=coverage.txt
+    
+    - name: Build Server Binary
+      run: |
+        set -e
+        go build -v -o bin/momentum-server ./cmd/server
+        ls -lh bin/
+    
+    - name: Verify Binary
+      run: |
+        set -e
+        file bin/momentum-server
+        ./bin/momentum-server --help || echo "Binary built successfully"
+    
+    - name: Upload Binary Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: momentum-server
+        path: bin/momentum-server
+        retention-days: 30
