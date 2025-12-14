@@ -124,7 +124,11 @@ These indexes satisfy the performance requirements from:
 
 Tested on:
 - ✅ SQLite (default for self-hosted)
-- ⚠️ PostgreSQL validation pending (but schema is cross-compatible)
+- ✅ PostgreSQL (production database)
+
+Both databases show correct index usage:
+- SQLite: Uses `SEARCH` with indexes for filtered queries
+- PostgreSQL: Uses `Index Scan` with indexes for filtered queries
 
 ## References
 
