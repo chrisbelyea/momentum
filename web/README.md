@@ -10,6 +10,16 @@ This directory contains the web-based kanban board UI for Momentum.
 - **Responsive design**: Works on desktop and mobile devices
 - **Real-time updates**: Status changes are immediately reflected in the UI
 
+## Known Limitations & Future Improvements
+
+This is an initial scaffold implementation. The following improvements are planned for future releases:
+
+1. **Authentication**: Currently uses hard-coded backend_id=1. Future versions will integrate proper user authentication and authorization.
+2. **Router**: Uses manual URL parsing. Consider migrating to gorilla/mux or similar router for more robust parameter handling.
+3. **Accessibility**: Replace alert() with ARIA live regions for screen reader compatibility.
+4. **Error Recovery**: Improve error handling to revert specific task cards instead of full page reload.
+5. **WebSocket Support**: Add real-time updates for collaborative editing scenarios.
+
 ## Architecture
 
 ### Template Structure
