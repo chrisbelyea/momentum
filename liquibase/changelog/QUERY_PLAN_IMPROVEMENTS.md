@@ -118,7 +118,8 @@ With these indexes in place:
 
 These indexes satisfy the performance requirements from:
 - **Section 6 (Non-Functional Requirements)**: "Board interactions remain responsive with 1,000+ tasks"
-- **Section 10 (Data Model Overview)**: Optimized for common query patterns on backend and status fields
+
+The indexes optimize the most common query patterns for board and list views filtering by backend and status.
 
 ## Testing
 
@@ -133,5 +134,5 @@ Both databases show correct index usage:
 ## References
 
 - Issue: Performance indexes: 002-indexes
-- Changeset: `liquibase/changelog/003-indexes.yaml`
-- Specification: `requirements/specification.md` (Sections 6, 10)
+- Changeset ID: 002-indexes (in file `liquibase/changelog/003-indexes.yaml`)
+- Specification: `requirements/specification.md` (Section 6: Non-Functional Requirements)
