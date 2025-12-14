@@ -36,22 +36,27 @@ func (r *TaskRepository) List(backendID int) ([]*models.Task, error) {
 
 	var tasks []*models.Task
 	for rows.Next() {
-		task := &models.Task{}
+		taskRow := &models.TaskRow{}
 		err := rows.Scan(
-			&task.ID,
-			&task.BackendID,
-			&task.ExternalID,
-			&task.Title,
-			&task.Description,
-			&task.Status,
-			&task.Priority,
-			&task.DueAt,
-			&task.TagsJSON,
-			&task.CreatedAt,
-			&task.UpdatedAt,
+			&taskRow.ID,
+			&taskRow.BackendID,
+			&taskRow.ExternalID,
+			&taskRow.Title,
+			&taskRow.Description,
+			&taskRow.Status,
+			&taskRow.Priority,
+			&taskRow.DueAt,
+			&taskRow.TagsJSON,
+			&taskRow.CreatedAt,
+			&taskRow.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan task: %w", err)
+		}
+
+		task, err := taskRow.ToTask()
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert task row: %w", err)
 		}
 		tasks = append(tasks, task)
 	}
@@ -72,19 +77,19 @@ func (r *TaskRepository) Get(id int) (*models.Task, error) {
 		WHERE id = ?
 	`
 
-	task := &models.Task{}
+	taskRow := &models.TaskRow{}
 	err := r.db.QueryRow(query, id).Scan(
-		&task.ID,
-		&task.BackendID,
-		&task.ExternalID,
-		&task.Title,
-		&task.Description,
-		&task.Status,
-		&task.Priority,
-		&task.DueAt,
-		&task.TagsJSON,
-		&task.CreatedAt,
-		&task.UpdatedAt,
+		&taskRow.ID,
+		&taskRow.BackendID,
+		&taskRow.ExternalID,
+		&taskRow.Title,
+		&taskRow.Description,
+		&taskRow.Status,
+		&taskRow.Priority,
+		&taskRow.DueAt,
+		&taskRow.TagsJSON,
+		&taskRow.CreatedAt,
+		&taskRow.UpdatedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -92,6 +97,11 @@ func (r *TaskRepository) Get(id int) (*models.Task, error) {
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
+	}
+
+	task, err := taskRow.ToTask()
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert task row: %w", err)
 	}
 
 	return task, nil
