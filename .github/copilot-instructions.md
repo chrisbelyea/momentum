@@ -86,10 +86,11 @@ A PR must pass all CI jobs before it can be merged.
 - Never modify a deployed changeset; create a new one for corrections.
 
 ## Common Workflows
-- **New Feature**: Create Issue → Branch (`feature/<slug>`) → Implement → Tests → Docs → PR → Review → Merge.
-- **Bug Fix**: Create Issue → Branch (`fix/<slug>`) → Fix → Tests → PR → Review → Merge.
-- **Database Change**: Draft Liquibase changeset → Validate → Test migrations → PR with rollback plan.
+- **New Feature**: Create Issue → Branch (`feature/<slug>`) → Implement → Tests → Docs → PR (draft) → Mark ready for review → Review → Merge.
+- **Bug Fix**: Create Issue → Branch (`fix/<slug>`) → Fix → Tests → PR (draft) → Mark ready for review → Review → Merge.
+- **Database Change**: Draft Liquibase changeset → Validate → Test migrations → PR (draft) → Mark ready for review with rollback plan.
 - **Integration**: Follow provider-specific auth patterns; use OS keychain for secrets.
+- **PR Status**: Always create PRs in draft status initially. When all work is complete (code, tests, docs updated, CI passing), mark the PR as ready for review to signal it's ready for human review and merge.
 
 ## Security Guidelines
 - Never commit secrets, tokens, or credentials.
