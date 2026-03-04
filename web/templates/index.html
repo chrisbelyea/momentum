@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Momentum - Kanban Board</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2rem;
+        }
+
+        .kanban-board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .column {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            min-height: 400px;
+        }
+
+        .column-header {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .column-header .count {
+            font-size: 0.9rem;
+            color: #666;
+            background: #f0f0f0;
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+
+        .todo .column-header {
+            color: #1976d2;
+            border-bottom-color: #1976d2;
+        }
+
+        .in-progress .column-header {
+            color: #f57c00;
+            border-bottom-color: #f57c00;
+        }
+
+        .done .column-header {
+            color: #388e3c;
+            border-bottom-color: #388e3c;
+        }
+
+        .column-content {
+            min-height: 350px;
+        }
+
+        .task-card {
+            background: #fafafa;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 10px;
+            cursor: move;
+            transition: all 0.2s ease;
+        }
+
+        .task-card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .task-card.dragging {
+            opacity: 0.5;
+        }
+
+        .task-card .task-title {
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 6px;
+        }
+
+        .task-card .task-description {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .task-card .task-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: #999;
+        }
+
+        .task-card .task-id {
+            font-family: monospace;
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .column-content.drag-over {
+            background: #e3f2fd;
+            border: 2px dashed #1976d2;
+            border-radius: 6px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+            font-style: italic;
+        }
+
+        @media (max-width: 1024px) {
+            .kanban-board {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>🎯 Momentum Kanban Board</h1>
+    
+    <div class="kanban-board">
+        <!-- Todo Column -->
+        <div class="column todo" data-status="NEEDS-ACTION">
+            <div class="column-header">
+                <span>📋 Todo</span>
+                <span class="count">{{ len .TodoTasks }}</span>
+            </div>
+            <div class="column-content" id="todo-column">
+                {{ if .TodoTasks }}
+                    {{ range .TodoTasks }}
+                    <div class="task-card" draggable="true" data-task-id="{{ .ID }}">
+                        <div class="task-title">{{ .Title }}</div>
+                        {{ if .Description }}
+                        <div class="task-description">{{ .Description }}</div>
+                        {{ end }}
+                        <div class="task-meta">
+                            <span class="task-id">#{{ .ID }}</span>
+                            {{ if .Priority }}
+                            <span>Priority: {{ .Priority }}</span>
+                            {{ end }}
+                        </div>
+                    </div>
+                    {{ end }}
+                {{ else }}
+                    <div class="empty-state">No tasks yet</div>
+                {{ end }}
+            </div>
+        </div>
+
+        <!-- In Progress Column -->
+        <div class="column in-progress" data-status="IN-PROCESS">
+            <div class="column-header">
+                <span>🚀 In Progress</span>
+                <span class="count">{{ len .InProgressTasks }}</span>
+            </div>
+            <div class="column-content" id="in-progress-column">
+                {{ if .InProgressTasks }}
+                    {{ range .InProgressTasks }}
+                    <div class="task-card" draggable="true" data-task-id="{{ .ID }}">
+                        <div class="task-title">{{ .Title }}</div>
+                        {{ if .Description }}
+                        <div class="task-description">{{ .Description }}</div>
+                        {{ end }}
+                        <div class="task-meta">
+                            <span class="task-id">#{{ .ID }}</span>
+                            {{ if .Priority }}
+                            <span>Priority: {{ .Priority }}</span>
+                            {{ end }}
+                        </div>
+                    </div>
+                    {{ end }}
+                {{ else }}
+                    <div class="empty-state">No tasks in progress</div>
+                {{ end }}
+            </div>
+        </div>
+
+        <!-- Done Column -->
+        <div class="column done" data-status="COMPLETED">
+            <div class="column-header">
+                <span>✅ Done</span>
+                <span class="count">{{ len .DoneTasks }}</span>
+            </div>
+            <div class="column-content" id="done-column">
+                {{ if .DoneTasks }}
+                    {{ range .DoneTasks }}
+                    <div class="task-card" draggable="true" data-task-id="{{ .ID }}">
+                        <div class="task-title">{{ .Title }}</div>
+                        {{ if .Description }}
+                        <div class="task-description">{{ .Description }}</div>
+                        {{ end }}
+                        <div class="task-meta">
+                            <span class="task-id">#{{ .ID }}</span>
+                            {{ if .Priority }}
+                            <span>Priority: {{ .Priority }}</span>
+                            {{ end }}
+                        </div>
+                    </div>
+                    {{ end }}
+                {{ else }}
+                    <div class="empty-state">No completed tasks</div>
+                {{ end }}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Drag and Drop functionality using HTML5 Drag and Drop API
+        let draggedElement = null;
+
+        // Get all task cards
+        const taskCards = document.querySelectorAll('.task-card');
+        const columns = document.querySelectorAll('.column-content');
+
+        // Add drag event listeners to task cards
+        taskCards.forEach(card => {
+            card.addEventListener('dragstart', handleDragStart);
+            card.addEventListener('dragend', handleDragEnd);
+        });
+
+        // Add drop event listeners to columns
+        columns.forEach(column => {
+            column.addEventListener('dragover', handleDragOver);
+            column.addEventListener('drop', handleDrop);
+            column.addEventListener('dragleave', handleDragLeave);
+        });
+
+        function handleDragStart(e) {
+            draggedElement = this;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', this.innerHTML);
+        }
+
+        function handleDragEnd(e) {
+            this.classList.remove('dragging');
+        }
+
+        function handleDragOver(e) {
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
+            e.dataTransfer.dropEffect = 'move';
+            this.classList.add('drag-over');
+            return false;
+        }
+
+        function handleDragLeave(e) {
+            this.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            if (e.stopPropagation) {
+                e.stopPropagation();
+            }
+            e.preventDefault();
+
+            this.classList.remove('drag-over');
+
+            if (draggedElement != null) {
+                const taskId = draggedElement.getAttribute('data-task-id');
+                const newStatus = this.closest('.column').getAttribute('data-status');
+                
+                // Move the element in the DOM
+                this.appendChild(draggedElement);
+
+                // Update the task status on the server
+                updateTaskStatus(taskId, newStatus);
+
+                // Remove empty states and update counts
+                updateColumnDisplay();
+            }
+
+            return false;
+        }
+
+        function updateTaskStatus(taskId, newStatus) {
+            fetch(`/api/tasks/${taskId}/status`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ status: newStatus })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(text || 'Failed to update task status');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Task status updated:', data);
+            })
+            .catch(error => {
+                console.error('Error updating task status:', error);
+                // Revert the UI change by reloading the page
+                alert('Failed to update task status: ' + error.message + '\nThe page will reload to restore the correct state.');
+                location.reload();
+            });
+        }
+
+        function updateColumnDisplay() {
+            // Update counts for each column
+            columns.forEach(column => {
+                const tasks = column.querySelectorAll('.task-card');
+                const count = column.closest('.column').querySelector('.count');
+                count.textContent = tasks.length;
+
+                // Remove empty state if there are tasks
+                const emptyState = column.querySelector('.empty-state');
+                if (emptyState) {
+                    if (tasks.length > 0) {
+                        emptyState.remove();
+                    }
+                } else if (tasks.length === 0) {
+                    // Add empty state if no tasks - use data-status attribute
+                    const columnStatus = column.closest('.column').getAttribute('data-status');
+                    const emptyDiv = document.createElement('div');
+                    emptyDiv.className = 'empty-state';
+                    
+                    // Map status to friendly text
+                    const statusText = {
+                        'NEEDS-ACTION': 'No tasks yet',
+                        'IN-PROCESS': 'No tasks in progress',
+                        'COMPLETED': 'No completed tasks'
+                    };
+                    emptyDiv.textContent = statusText[columnStatus] || 'No tasks';
+                    column.appendChild(emptyDiv);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
