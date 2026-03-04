@@ -10,3 +10,4 @@ liquibase.zip
 /bin/
 /dist/
 momentum-server
+server
