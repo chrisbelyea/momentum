@@ -2,6 +2,7 @@
 Momentum brings your to-dos, reminders, and CalDAV tasks into one flow — visible as lists or boards. Designed for people who want to see their life in motion.
 
 ## Documentation
+- **Project Status**: [docs/status.md](docs/status.md) — where we are and what's next
 - Vision: [requirements/vision.md](requirements/vision.md)
 - Specification: [requirements/specification.md](requirements/specification.md)
 - Features: [requirements/feature-list.md](requirements/feature-list.md)
