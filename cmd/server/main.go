@@ -1,6 +1,7 @@
 package main
 
 import (
+"crypto/tls"
 "database/sql"
 "fmt"
 "log"
@@ -18,7 +19,20 @@ _ "github.com/mattn/go-sqlite3"
 func main() {
 // Get configuration from environment
 dbPath := getEnv("DB_PATH", "momentum.db")
-port := getEnv("PORT", "8080")
+port := getEnv("PORT", "8443")
+tlsCert := os.Getenv("TLS_CERT")
+tlsKey := os.Getenv("TLS_KEY")
+httpRedirectPort := os.Getenv("HTTP_REDIRECT_PORT")
+
+// TLS is required; fail fast if cert/key are not provided.
+if tlsCert == "" || tlsKey == "" {
+log.Fatalf(
+"TLS configuration is required.\n" +
+"Set TLS_CERT and TLS_KEY environment variables to the paths of your\n" +
+"certificate and private key files.\n" +
+"See docs/tls-setup.md for dev and production setup instructions.",
+)
+}
 
 // Initialize encryption
 if err := crypto.LoadEncryptionKeyFromEnv(); err != nil {
@@ -75,12 +89,35 @@ w.WriteHeader(http.StatusOK)
 fmt.Fprintf(w, "OK")
 })
 
-// Start server
+// Optionally start an HTTP redirect server that sends plain-HTTP clients to HTTPS.
+if httpRedirectPort != "" {
+redirectAddr := fmt.Sprintf(":%s", httpRedirectPort)
+log.Printf("Starting HTTP redirect server on %s -> HTTPS port %s", redirectAddr, port)
+go func() {
+redirectMux := http.NewServeMux()
+redirectMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+target := "https://" + r.Host + r.URL.RequestURI()
+http.Redirect(w, r, target, http.StatusMovedPermanently)
+})
+if err := http.ListenAndServe(redirectAddr, redirectMux); err != nil {
+log.Printf("HTTP redirect server error: %v", err)
+}
+}()
+}
+
+// Start TLS server — TLS 1.3 minimum, strong cipher suites enforced by Go's crypto/tls.
 addr := fmt.Sprintf(":%s", port)
-log.Printf("Starting Momentum CalDAV server on %s", addr)
+log.Printf("Starting Momentum server on %s (TLS)", addr)
 log.Printf("Database: %s", dbPath)
 
-if err := http.ListenAndServe(addr, mux); err != nil {
+server := &http.Server{
+Addr:    addr,
+Handler: mux,
+TLSConfig: &tls.Config{
+MinVersion: tls.VersionTLS13,
+},
+}
+if err := server.ListenAndServeTLS(tlsCert, tlsKey); err != nil {
 log.Fatalf("Server failed to start: %v", err)
 }
 }

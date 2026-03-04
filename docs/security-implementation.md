@@ -50,11 +50,33 @@ Base64 encoded for storage in the database.
 
 ### Minimum Requirements
 
-- **TLS Version**: 1.3 minimum (configurable, but enforced by default)
+- **TLS Version**: 1.3 minimum (enforced by default for both server and outbound connections)
 - **Certificate Validation**: Enabled by default
 - **Strong Cipher Suites**: Modern cipher suites only (managed by Go's crypto/tls)
+- **HTTP rejected**: The server requires TLS certificate and key at startup; plaintext HTTP is never served
 
-### Connection Settings
+### Server TLS Configuration
+
+Location: `cmd/server/main.go`
+
+The server enforces TLS on startup. The `TLS_CERT` and `TLS_KEY` environment variables
+must be set to valid certificate and key file paths. If they are absent the server exits
+with an error. An optional HTTP redirect listener can be enabled via `HTTP_REDIRECT_PORT`.
+
+```go
+server := &http.Server{
+    Addr:    addr,
+    Handler: mux,
+    TLSConfig: &tls.Config{
+        MinVersion: tls.VersionTLS13,
+    },
+}
+server.ListenAndServeTLS(tlsCert, tlsKey)
+```
+
+See [docs/tls-setup.md](tls-setup.md) for dev and production setup instructions.
+
+### Outbound Connection Settings
 
 Location: `internal/caldav/client.go`
 
@@ -200,7 +222,8 @@ This implementation follows security best practices from:
 ## Security Checklist
 
 - [x] All credentials encrypted at rest (AES-256-GCM)
-- [x] TLS 1.3+ enforced for external connections
+- [x] TLS 1.3+ enforced for all connections (server and external)
+- [x] Plaintext HTTP rejected — server exits without TLS cert/key
 - [x] Certificate validation enabled by default
 - [x] Passwords never returned in API responses
 - [x] Comprehensive input validation
