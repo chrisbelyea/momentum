@@ -1,0 +1,10 @@
+{
+  "name": "Momentum",
+  "short_name": "Momentum",
+  "description": "Kanban task manager with CalDAV backend",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#1976d2",
+  "icons": []
+}

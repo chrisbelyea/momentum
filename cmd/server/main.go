@@ -56,6 +56,9 @@ webHandler := web.NewHandler(taskRepo)
 // Setup routes
 mux := http.NewServeMux()
 
+// Static file serving (PWA assets: manifest.json, icons, service worker)
+mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
+
 // Web UI routes
 mux.HandleFunc("/", webHandler.HandleIndex)
 mux.HandleFunc("/api/tasks/", webHandler.HandleUpdateStatus)
