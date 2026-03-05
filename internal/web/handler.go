@@ -43,12 +43,19 @@ func (h *Handler) HandleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Apply filter (tag filter only; status filter handled by column grouping)
+	filter := ParseTaskFilter(r)
+	// For the board, only apply the tag filter so columns remain meaningful
+	boardFilter := TaskFilter{Tag: filter.Tag, Sort: "created_at", Order: "desc"}
+	tasks = ApplyFilter(tasks, boardFilter)
+
 	// Group tasks by status
 	data := struct {
 		TodoTasks       []*models.Task
 		InProgressTasks []*models.Task
 		DoneTasks       []*models.Task
-	}{}
+		Filter          TaskFilter
+	}{Filter: filter}
 
 	for _, task := range tasks {
 		switch task.Status {
@@ -62,6 +69,39 @@ func (h *Handler) HandleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.templates.ExecuteTemplate(w, "index.html", data); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to render template: %v", err), http.StatusInternalServerError)
+		return
+	}
+}
+
+// HandleList serves the list view with filter/sort support
+func (h *Handler) HandleList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// For now, use backend_id=1 as default
+	backendID := 1
+
+	tasks, err := h.taskRepo.List(backendID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to load tasks: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	filter := ParseTaskFilter(r)
+	tasks = ApplyFilter(tasks, filter)
+
+	data := struct {
+		Tasks  []*models.Task
+		Filter TaskFilter
+	}{
+		Tasks:  tasks,
+		Filter: filter,
+	}
+
+	if err := h.templates.ExecuteTemplate(w, "list.html", data); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to render template: %v", err), http.StatusInternalServerError)
 		return
 	}

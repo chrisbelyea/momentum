@@ -5,6 +5,75 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Momentum - Kanban Board</title>
     <style>
+        .view-nav {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .view-nav a {
+            padding: 8px 18px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 500;
+            border: 1px solid #ccc;
+            color: #555;
+            background: #fff;
+        }
+
+        .view-nav a.active {
+            background: #1976d2;
+            color: #fff;
+            border-color: #1976d2;
+        }
+
+        .filter-bar {
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filter-bar label {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .filter-bar input {
+            padding: 7px 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            background: #fafafa;
+        }
+
+        .filter-bar input:focus {
+            outline: none;
+            border-color: #1976d2;
+            background: #fff;
+        }
+
+        .filter-bar button,
+        .filter-bar a.btn {
+            padding: 7px 14px;
+            border: none;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            font-weight: 500;
+            text-decoration: none;
+        }
+
+        .btn-primary { background: #1976d2; color: #fff; }
+        .btn-secondary { background: #e0e0e0; color: #333; display: inline-block; }
+    </style>
+    <style>
         * {
             margin: 0;
             padding: 0;
@@ -145,6 +214,21 @@
 </head>
 <body>
     <h1>🎯 Momentum Kanban Board</h1>
+
+    <div class="view-nav">
+        <a href="/" class="active">📋 Board</a>
+        <a href="/list">📄 List</a>
+    </div>
+
+    <!-- Tag filter bar -->
+    <form class="filter-bar" method="GET" action="/">
+        <div>
+            <label for="tag">Filter by Tag</label><br>
+            <input id="tag" name="tag" type="text" placeholder="Tag name…" value="{{ .Filter.Tag }}">
+        </div>
+        <button type="submit" class="btn-primary btn">Apply</button>
+        <a href="/" class="btn btn-secondary">Clear</a>
+    </form>
     
     <div class="kanban-board">
         <!-- Todo Column -->
