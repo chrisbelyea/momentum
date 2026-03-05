@@ -77,6 +77,7 @@ mux := http.NewServeMux()
 
 // Web UI routes
 mux.HandleFunc("/", webHandler.HandleIndex)
+mux.HandleFunc("/list", webHandler.HandleList)
 mux.HandleFunc("/api/tasks/", webHandler.HandleUpdateStatus)
 
 // CalDAV routes
