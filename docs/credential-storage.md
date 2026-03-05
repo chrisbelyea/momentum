@@ -65,17 +65,17 @@ vault.Remove(vault.Retrieve("momentum", accountId));
 
 ---
 
-### macOS: Keychain Services
+### macOS / iOS / iPadOS: Keychain Services
 
 **API**: [Keychain Services](https://developer.apple.com/documentation/security/keychain_services) (Security framework)  
 **Backing store**: macOS Keychain (login keychain or iCloud Keychain)  
 **Clients**: macOS (Swift + AppKit), iOS/iPadOS (Swift + UIKit/SwiftUI)
 
-The macOS Keychain is a secure, encrypted database managed by the Security framework. On Apple Silicon and modern Intel Macs, the keychain is backed by the Secure Enclave for hardware-level protection. Items can optionally sync to iCloud Keychain, making them available across a user's Apple devices.
+The macOS Keychain is a secure, encrypted database managed by the Security framework. On Apple Silicon and modern Intel Macs, the keychain benefits from Apple's Data Protection infrastructure with hardware-accelerated encryption. Items can optionally sync to iCloud Keychain, making them available across a user's Apple devices.
 
 #### Key Characteristics
 
-- Items are encrypted at rest using hardware-backed keys where available (Secure Enclave on Apple Silicon).
+- Items are encrypted at rest using the platform's Data Protection classes.
 - Per-app access controls: only the creating app (and apps it explicitly trusts) can read items.
 - Supports access control policies (e.g., require biometric authentication before retrieval).
 - iCloud Keychain sync is opt-in per item.
