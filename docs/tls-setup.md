@@ -9,10 +9,11 @@ HTTP requests are permanently redirected to HTTPS instead.
 
 | Variable            | Required | Default | Description                                      |
 |---------------------|----------|---------|--------------------------------------------------|
-| `TLS_CERT`          | Yes      | —       | Path to the TLS certificate file (PEM format)    |
-| `TLS_KEY`           | Yes      | —       | Path to the TLS private key file (PEM format)    |
-| `PORT`              | No       | `8443`  | HTTPS listen port                                |
-| `HTTP_REDIRECT_PORT`| No       | —       | If set, an HTTP server on this port redirects all requests to HTTPS |
+| `TLS_CERT`          | Yes      | —                    | Path to the TLS certificate file (PEM format)                                    |
+| `TLS_KEY`           | Yes      | —                    | Path to the TLS private key file (PEM format)                                    |
+| `PORT`              | No       | `8443`               | HTTPS listen port                                                                |
+| `EXTERNAL_HOST`     | No       | `localhost:<PORT>`   | Public hostname (and optional port) used to build HTTP→HTTPS redirect URLs. Set this to your domain in production (e.g., `example.com` or `example.com:8443`) |
+| `HTTP_REDIRECT_PORT`| No       | —                    | If set, an HTTP server on this port redirects all requests to HTTPS              |
 
 > **Minimum TLS version**: TLS 1.3. Cipher suite selection is managed by Go's
 > `crypto/tls` package, which only enables strong suites by default.
@@ -105,8 +106,8 @@ export HTTP_REDIRECT_PORT=80   # optional: redirects http:// to https://
 #### Automatic renewal
 
 Certbot installs a systemd timer (or cron job) that renews certificates automatically.
-Because Momentum holds the key files open until restart, configure a renewal hook to
-restart the server after renewal:
+Because Momentum loads the TLS certificate and key at startup and does not automatically
+reload renewed files, configure a renewal hook so the service restarts after renewal:
 
 ```bash
 # /etc/letsencrypt/renewal-hooks/deploy/restart-momentum.sh

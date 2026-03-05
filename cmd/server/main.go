@@ -7,6 +7,7 @@ import (
 "log"
 "net/http"
 "os"
+"time"
 
 "github.com/chrisbelyea/momentum/internal/backend"
 "github.com/chrisbelyea/momentum/internal/caldav"
@@ -23,6 +24,10 @@ port := getEnv("PORT", "8443")
 tlsCert := os.Getenv("TLS_CERT")
 tlsKey := os.Getenv("TLS_KEY")
 httpRedirectPort := os.Getenv("HTTP_REDIRECT_PORT")
+// EXTERNAL_HOST is used to build safe redirect URLs. Defaults to localhost:<port>.
+// Set this to your public hostname (e.g., "example.com" or "example.com:8443") in
+// production to ensure the HTTP redirect target is always your own server.
+externalHost := getEnv("EXTERNAL_HOST", "localhost:"+port)
 
 // TLS is required; fail fast if cert/key are not provided.
 if tlsCert == "" || tlsKey == "" {
@@ -90,16 +95,47 @@ fmt.Fprintf(w, "OK")
 })
 
 // Optionally start an HTTP redirect server that sends plain-HTTP clients to HTTPS.
+// The redirect target is built from EXTERNAL_HOST (not the client-supplied Host
+// header) to prevent host-header injection / open redirect attacks.
 if httpRedirectPort != "" {
+// Build the HTTPS base URL using the trusted external host. Include the port only
+// when it is not the standard HTTPS port (443).
+httpsBase := "https://" + externalHost
+if port != "443" {
+// If externalHost already contains a port (operator explicitly set it), use
+// it as-is; otherwise append our port.
+hasPort := false
+for i := len(externalHost) - 1; i >= 0; i-- {
+if externalHost[i] == ':' {
+hasPort = true
+break
+}
+if externalHost[i] == ']' {
+// IPv6 address with no port
+break
+}
+}
+if !hasPort {
+httpsBase = "https://" + externalHost + ":" + port
+}
+}
+
 redirectAddr := fmt.Sprintf(":%s", httpRedirectPort)
-log.Printf("Starting HTTP redirect server on %s -> HTTPS port %s", redirectAddr, port)
+log.Printf("Starting HTTP redirect server on %s -> %s", redirectAddr, httpsBase)
 go func() {
 redirectMux := http.NewServeMux()
 redirectMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-target := "https://" + r.Host + r.URL.RequestURI()
+target := httpsBase + r.URL.RequestURI()
 http.Redirect(w, r, target, http.StatusMovedPermanently)
 })
-if err := http.ListenAndServe(redirectAddr, redirectMux); err != nil {
+redirectServer := &http.Server{
+Addr:              redirectAddr,
+Handler:           redirectMux,
+ReadHeaderTimeout: 5 * time.Second,
+ReadTimeout:       10 * time.Second,
+WriteTimeout:      10 * time.Second,
+}
+if err := redirectServer.ListenAndServe(); err != nil {
 log.Printf("HTTP redirect server error: %v", err)
 }
 }()
@@ -116,6 +152,9 @@ Handler: mux,
 TLSConfig: &tls.Config{
 MinVersion: tls.VersionTLS13,
 },
+ReadHeaderTimeout: 10 * time.Second,
+ReadTimeout:       30 * time.Second,
+WriteTimeout:      30 * time.Second,
 }
 if err := server.ListenAndServeTLS(tlsCert, tlsKey); err != nil {
 log.Fatalf("Server failed to start: %v", err)
