@@ -12,7 +12,7 @@ import (
 // TaskFilter holds filter and sort parameters for task lists.
 type TaskFilter struct {
 	Status string // filter by exact status value; empty means all
-	Tag    string // filter by tag (substring match against tags_json array); empty means all
+	Tag    string // filter by tag (case-insensitive exact match against tags_json array elements); empty means all
 	Sort   string // sort field: "due_at", "title", "status", "created_at" (default)
 	Order  string // "asc" or "desc" (default: "desc" for created_at, "asc" otherwise)
 }
@@ -61,30 +61,37 @@ func ApplyFilter(tasks []*models.Task, f TaskFilter) []*models.Task {
 	// Sort
 	sort.SliceStable(filtered, func(i, j int) bool {
 		a, b := filtered[i], filtered[j]
-		var less bool
 		switch f.Sort {
 		case "title":
-			less = strings.ToLower(a.Title) < strings.ToLower(b.Title)
+			ta, tb := strings.ToLower(a.Title), strings.ToLower(b.Title)
+			if f.Order == "desc" {
+				return tb < ta
+			}
+			return ta < tb
 		case "status":
-			less = a.Status < b.Status
+			if f.Order == "desc" {
+				return b.Status < a.Status
+			}
+			return a.Status < b.Status
 		case "due_at":
 			// nil due dates sort last regardless of order
 			if a.DueAt == nil && b.DueAt == nil {
-				less = false
+				return false
 			} else if a.DueAt == nil {
 				return false // nil always last
 			} else if b.DueAt == nil {
 				return true // non-nil before nil
-			} else {
-				less = a.DueAt.Before(*b.DueAt)
 			}
+			if f.Order == "desc" {
+				return b.DueAt.Before(*a.DueAt)
+			}
+			return a.DueAt.Before(*b.DueAt)
 		default: // created_at
-			less = a.CreatedAt.Before(b.CreatedAt)
+			if f.Order == "desc" {
+				return b.CreatedAt.Before(a.CreatedAt)
+			}
+			return a.CreatedAt.Before(b.CreatedAt)
 		}
-		if f.Order == "desc" {
-			return !less
-		}
-		return less
 	})
 
 	return filtered

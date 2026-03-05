@@ -147,8 +147,8 @@ func TestParseTaskFilter_InvalidSortFallback(t *testing.T) {
 func TestParseTaskFilter_ValidParams(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/list?status=COMPLETED&tag=urgent&sort=due_at&order=asc", nil)
 	f := ParseTaskFilter(req)
-	if f.Status != "COMPLETED" {
-		t.Errorf("expected status COMPLETED, got %q", f.Status)
+	if f.Status != models.StatusCompleted {
+		t.Errorf("expected status %q, got %q", models.StatusCompleted, f.Status)
 	}
 	if f.Tag != "urgent" {
 		t.Errorf("expected tag 'urgent', got %q", f.Tag)
