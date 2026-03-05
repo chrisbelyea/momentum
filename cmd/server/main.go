@@ -15,6 +15,9 @@ import (
 _ "github.com/mattn/go-sqlite3"
 )
 
+// version is set at build time via -ldflags "-X main.version=<tag>".
+var version = "dev"
+
 func main() {
 // Get configuration from environment
 dbPath := getEnv("DB_PATH", "momentum.db")
@@ -56,8 +59,18 @@ webHandler := web.NewHandler(taskRepo)
 // Setup routes
 mux := http.NewServeMux()
 
-// Static file serving (PWA assets: manifest.json, icons, service worker)
-mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
+// Static file serving (PWA assets: manifest.json, icons, service worker).
+// Directory listings are disabled; individual files are cached for one year.
+staticFileServer := http.FileServer(http.Dir("web/static"))
+mux.Handle("/static/", http.StripPrefix("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// Disable directory listings
+if r.URL.Path == "" || r.URL.Path[len(r.URL.Path)-1] == '/' {
+http.NotFound(w, r)
+return
+}
+w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+staticFileServer.ServeHTTP(w, r)
+})))
 
 // Web UI routes
 mux.HandleFunc("/", webHandler.HandleIndex)
@@ -80,7 +93,7 @@ fmt.Fprintf(w, "OK")
 
 // Start server
 addr := fmt.Sprintf(":%s", port)
-log.Printf("Starting Momentum CalDAV server on %s", addr)
+log.Printf("Starting Momentum %s on %s", version, addr)
 log.Printf("Database: %s", dbPath)
 
 if err := http.ListenAndServe(addr, mux); err != nil {

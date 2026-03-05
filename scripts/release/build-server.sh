@@ -11,7 +11,7 @@
 #
 # Output:
 #   dist/server/momentum-server[.exe]
-#   dist/server/momentum-server.sha256
+#   dist/server/momentum-server[.exe].sha256
 
 set -euo pipefail
 
@@ -52,7 +52,18 @@ CGO_ENABLED=1 GOOS="${GOOS}" GOARCH="${GOARCH}" go build \
   ./cmd/server
 
 echo "==> Generating checksum..."
-(cd "${DIST_DIR}" && sha256sum "${BIN_NAME}" > "${BIN_NAME}.sha256")
+# sha256sum is standard on Linux; macOS ships shasum/openssl instead.
+sha256_file() {
+  local file="$1"
+  if command -v sha256sum &>/dev/null; then
+    sha256sum "${file}"
+  elif command -v shasum &>/dev/null; then
+    shasum -a 256 "${file}"
+  else
+    openssl dgst -sha256 "${file}" | awk -v fname="${file}" '{print $NF"  "fname}'
+  fi
+}
+(cd "${DIST_DIR}" && sha256_file "${BIN_NAME}" > "${BIN_NAME}.sha256")
 
 echo ""
 echo "Artifacts:"

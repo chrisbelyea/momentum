@@ -13,7 +13,7 @@ This document describes how to build distributable release artifacts for Momentu
 | Go | 1.24+ | CGO required (`gcc`/`clang` must be on `PATH`) |
 | `gcc` or `clang` | any modern | Required by `go-sqlite3` CGO driver |
 | `git` | any | Used to derive the version string |
-| `tar` / `sha256sum` | standard | Bundled on Linux/macOS; Windows users can use WSL |
+| `tar` + checksum tool | standard | `tar` is bundled on Linux/macOS; use `sha256sum` on Linux, or `shasum -a 256` / `openssl dgst -sha256` on macOS (or `gsha256sum` via Homebrew coreutils); Windows users can use WSL |
 
 Verify your environment:
 
@@ -27,7 +27,7 @@ git --version     # git version 2.x.x
 
 ## Server Single-Executable
 
-The server is a self-contained Go binary with no external runtime dependencies beyond the SQLite shared library compiled in via CGO.
+The server is a self-contained Go binary. SQLite is compiled into the binary via the `go-sqlite3` CGO driver, so no external SQLite shared library is required at runtime (CGO and a C compiler are required at build time only).
 
 ### Quick build (current platform)
 
@@ -47,8 +47,10 @@ Use the provided script to produce a release-quality binary under `dist/server/`
 
 ```
 dist/server/
-  momentum-server         # server binary
-  momentum-server.sha256  # SHA-256 checksum
+  momentum-server             # server binary (Linux/macOS)
+  momentum-server.sha256      # SHA-256 checksum (Linux/macOS)
+  momentum-server.exe         # server binary (Windows)
+  momentum-server.exe.sha256  # SHA-256 checksum (Windows)
 ```
 
 ### Cross-platform builds
@@ -199,8 +201,10 @@ After both scripts complete, `dist/` contains:
 ```
 dist/
   server/
-    momentum-server         # or momentum-server.exe on Windows
-    momentum-server.sha256
+    momentum-server             # Linux/macOS binary
+    momentum-server.sha256      # Linux/macOS checksum
+    momentum-server.exe         # Windows binary
+    momentum-server.exe.sha256  # Windows checksum
   web/
     templates/
     static/

@@ -43,7 +43,18 @@ ARCHIVE="${REPO_ROOT}/dist/web.tar.gz"
 tar -czf "${ARCHIVE}" -C "${REPO_ROOT}/dist" web
 
 echo "==> Generating checksum..."
-(cd "${REPO_ROOT}/dist" && sha256sum "web.tar.gz" > "web.tar.gz.sha256")
+# sha256sum is standard on Linux; macOS ships shasum/openssl instead.
+sha256_file() {
+  local file="$1"
+  if command -v sha256sum &>/dev/null; then
+    sha256sum "${file}"
+  elif command -v shasum &>/dev/null; then
+    shasum -a 256 "${file}"
+  else
+    openssl dgst -sha256 "${file}" | awk -v fname="${file}" '{print $NF"  "fname}'
+  fi
+}
+(cd "${REPO_ROOT}/dist" && sha256_file "web.tar.gz" > "web.tar.gz.sha256")
 
 echo ""
 echo "Artifacts:"
