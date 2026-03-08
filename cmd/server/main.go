@@ -5,6 +5,7 @@ import (
 "database/sql"
 "fmt"
 "log"
+"net"
 "net/http"
 "os"
 "time"
@@ -122,8 +123,12 @@ httpsBase = "https://" + externalHost + ":" + port
 }
 
 redirectAddr := fmt.Sprintf(":%s", httpRedirectPort)
-log.Printf("Starting HTTP redirect server on %s -> %s", redirectAddr, httpsBase)
 go func() {
+ln, err := net.Listen("tcp", redirectAddr)
+if err != nil {
+log.Fatalf("HTTP redirect server failed to bind on %s: %v", redirectAddr, err)
+}
+log.Printf("Starting HTTP redirect server on %s -> %s", redirectAddr, httpsBase)
 redirectMux := http.NewServeMux()
 redirectMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 target := httpsBase + r.URL.RequestURI()
@@ -136,7 +141,7 @@ ReadHeaderTimeout: 5 * time.Second,
 ReadTimeout:       10 * time.Second,
 WriteTimeout:      10 * time.Second,
 }
-if err := redirectServer.ListenAndServe(); err != nil {
+if err := redirectServer.Serve(ln); err != nil {
 log.Printf("HTTP redirect server error: %v", err)
 }
 }()
