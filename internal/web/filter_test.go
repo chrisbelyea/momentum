@@ -11,8 +11,6 @@ import (
 	"github.com/chrisbelyea/momentum/internal/models"
 )
 
-func strPtr(s string) *string { return &s }
-
 // sampleTasks returns a set of tasks used across filter tests.
 func sampleTasks() []*models.Task {
 	t1 := time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC)
