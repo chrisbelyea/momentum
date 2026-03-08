@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Momentum - List View</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 2rem;
+        }
+
+        .view-nav {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .view-nav a {
+            padding: 8px 18px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 500;
+            border: 1px solid #ccc;
+            color: #555;
+            background: #fff;
+        }
+
+        .view-nav a.active {
+            background: #1976d2;
+            color: #fff;
+            border-color: #1976d2;
+        }
+
+        .filters {
+            background: #fff;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            max-width: 1100px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .filters form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: flex-end;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .filter-group label {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .filter-group select,
+        .filter-group input {
+            padding: 7px 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            background: #fafafa;
+        }
+
+        .filter-group select:focus,
+        .filter-group input:focus {
+            outline: none;
+            border-color: #1976d2;
+            background: #fff;
+        }
+
+        .filter-actions {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        .btn {
+            padding: 7px 16px;
+            border: none;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background: #1976d2;
+            color: #fff;
+        }
+
+        .btn-secondary {
+            background: #e0e0e0;
+            color: #333;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .task-table-wrapper {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            overflow-x: auto;
+        }
+
+        .task-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .task-table th {
+            background: #f0f4f8;
+            padding: 12px 14px;
+            text-align: left;
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: #444;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            border-bottom: 2px solid #e0e0e0;
+            white-space: nowrap;
+        }
+
+        .task-table th a {
+            color: #444;
+            text-decoration: none;
+        }
+
+        .task-table th a:hover {
+            color: #1976d2;
+        }
+
+        .task-table th .sort-arrow {
+            margin-left: 4px;
+            color: #1976d2;
+        }
+
+        .task-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.92rem;
+            color: #333;
+            vertical-align: middle;
+        }
+
+        .task-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .task-table tr:hover td {
+            background: #f8fbff;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+
+        .status-needs-action { background: #e3f2fd; color: #1565c0; }
+        .status-in-process   { background: #fff3e0; color: #e65100; }
+        .status-completed    { background: #e8f5e9; color: #2e7d32; }
+        .status-cancelled    { background: #fafafa; color: #757575; }
+
+        .task-id {
+            font-family: monospace;
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.82rem;
+        }
+
+        .tag {
+            display: inline-block;
+            background: #e8eaf6;
+            color: #3949ab;
+            border-radius: 10px;
+            padding: 2px 8px;
+            font-size: 0.77rem;
+            margin: 1px 2px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 48px 20px;
+            color: #aaa;
+            font-style: italic;
+        }
+
+        .task-count {
+            text-align: center;
+            font-size: 0.85rem;
+            color: #888;
+            margin-bottom: 10px;
+        }
+
+        @media (max-width: 700px) {
+            .filters form { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <h1>🎯 Momentum</h1>
+
+    <div class="view-nav">
+        <a href="/">📋 Board</a>
+        <a href="/list" class="active">📄 List</a>
+    </div>
+
+    <!-- Filter / Sort controls -->
+    <div class="filters">
+        <form method="GET" action="/list">
+            <div class="filter-group">
+                <label for="status">Status</label>
+                <select id="status" name="status">
+                    <option value="">All</option>
+                    <option value="NEEDS-ACTION"{{ if eq .Filter.Status "NEEDS-ACTION" }} selected{{ end }}>Todo</option>
+                    <option value="IN-PROCESS"{{ if eq .Filter.Status "IN-PROCESS" }} selected{{ end }}>In Progress</option>
+                    <option value="COMPLETED"{{ if eq .Filter.Status "COMPLETED" }} selected{{ end }}>Done</option>
+                    <option value="CANCELLED"{{ if eq .Filter.Status "CANCELLED" }} selected{{ end }}>Cancelled</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="tag">Tag</label>
+                <input id="tag" name="tag" type="text" placeholder="Filter by tag…" value="{{ .Filter.Tag }}">
+            </div>
+            <div class="filter-group">
+                <label for="sort">Sort by</label>
+                <select id="sort" name="sort">
+                    <option value="created_at"{{ if eq .Filter.Sort "created_at" }} selected{{ end }}>Created</option>
+                    <option value="due_at"{{ if eq .Filter.Sort "due_at" }} selected{{ end }}>Due Date</option>
+                    <option value="title"{{ if eq .Filter.Sort "title" }} selected{{ end }}>Title</option>
+                    <option value="status"{{ if eq .Filter.Sort "status" }} selected{{ end }}>Status</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="order">Order</label>
+                <select id="order" name="order">
+                    <option value="asc"{{ if eq .Filter.Order "asc" }} selected{{ end }}>Ascending</option>
+                    <option value="desc"{{ if eq .Filter.Order "desc" }} selected{{ end }}>Descending</option>
+                </select>
+            </div>
+            <div class="filter-actions">
+                <button type="submit" class="btn btn-primary">Apply</button>
+                <a href="/list" class="btn btn-secondary">Clear</a>
+            </div>
+        </form>
+    </div>
+
+    <p class="task-count">{{ len .Tasks }} task{{ if ne (len .Tasks) 1 }}s{{ end }}</p>
+
+    <div class="task-table-wrapper">
+        {{ if .Tasks }}
+        <table class="task-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Title</th>
+                    <th>Status</th>
+                    <th>Due Date</th>
+                    <th>Tags</th>
+                    <th>Priority</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{ range .Tasks }}
+                <tr>
+                    <td><span class="task-id">{{ .ID }}</span></td>
+                    <td>
+                        {{ .Title }}
+                        {{ if .Description }}
+                        <div style="font-size:0.82rem;color:#888;margin-top:2px;">{{ .Description }}</div>
+                        {{ end }}
+                    </td>
+                    <td>
+                        {{ if eq .Status "NEEDS-ACTION" }}<span class="status-badge status-needs-action">Todo</span>
+                        {{ else if eq .Status "IN-PROCESS" }}<span class="status-badge status-in-process">In Progress</span>
+                        {{ else if eq .Status "COMPLETED" }}<span class="status-badge status-completed">Done</span>
+                        {{ else if eq .Status "CANCELLED" }}<span class="status-badge status-cancelled">Cancelled</span>
+                        {{ else }}<span class="status-badge">{{ .Status }}</span>{{ end }}
+                    </td>
+                    <td>
+                        {{ if .DueAt }}{{ .DueAt.Format "2006-01-02" }}{{ else }}<span style="color:#ccc;">—</span>{{ end }}
+                    </td>
+                    <td>
+                        {{ if .TagsJSON }}
+                            <!-- Tags rendered client-side from JSON -->
+                            <span class="tags-raw" style="display:none;">{{ .TagsJSON }}</span>
+                            <span class="tags-display"></span>
+                        {{ else }}<span style="color:#ccc;">—</span>{{ end }}
+                    </td>
+                    <td>
+                        {{ if .Priority }}{{ .Priority }}{{ else }}<span style="color:#ccc;">—</span>{{ end }}
+                    </td>
+                </tr>
+                {{ end }}
+            </tbody>
+        </table>
+        {{ else }}
+        <div class="empty-state">No tasks match the current filters.</div>
+        {{ end }}
+    </div>
+
+    <script>
+        // Render tags from JSON strings
+        document.querySelectorAll('.tags-raw').forEach(function(el) {
+            try {
+                var tags = JSON.parse(el.textContent);
+                var display = el.nextElementSibling;
+                tags.forEach(function(tag) {
+                    var span = document.createElement('span');
+                    span.className = 'tag';
+                    span.textContent = tag;
+                    display.appendChild(span);
+                });
+            } catch(e) { console.warn('Failed to parse task tags:', e); }
+        });
+    </script>
+</body>
+</html>

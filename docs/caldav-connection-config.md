@@ -283,7 +283,7 @@ go test ./internal/db -v
 ## Future Enhancements
 
 - OAuth 2.0 support for CalDAV servers that support it
-- OS keychain integration for client-side credential storage
+- OS keychain integration for client-side credential storage (see [credential-storage.md](credential-storage.md))
 - Connection pooling and retry logic
 - Automatic credential rotation
 - Multi-factor authentication support

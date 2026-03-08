@@ -381,7 +381,7 @@ The sync orchestrator handles various error conditions gracefully. Retry limits 
 
 ### 2. Security by Default
 - **TLS-only communication**: HTTPS/TLS 1.3+ with strong cipher suites exclusively
-- **Encrypted credentials**: OS keychain integration on clients; encrypted at rest on server
+- **Encrypted credentials**: OS keychain integration on clients (see [credential-storage.md](credential-storage.md)); encrypted at rest on server
 - **Least privilege**: Minimal permission scopes; per-user backend access
 - **Regular security updates**: Dependency audits and vulnerability scanning in CI
 
