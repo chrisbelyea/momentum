@@ -233,6 +233,10 @@ This implementation follows security best practices from:
 - [x] Foreign key constraints for data integrity
 - [x] Comprehensive security tests
 
+## Client-Side Credential Storage
+
+Native clients (Windows, macOS, iOS/iPadOS, Linux desktop) store credentials in the OS keychain rather than on disk or in application databases. See [credential-storage.md](credential-storage.md) for the platform-specific mechanisms and implementation guidance.
+
 ## Known Limitations
 
 1. **Key Storage**: Encryption key must be managed by operator (future: integrate with key management systems)
@@ -250,3 +254,4 @@ Security vulnerabilities should be reported according to the guidelines in `SECU
 - [RFC 8446: TLS 1.3](https://datatracker.ietf.org/doc/html/rfc8446)
 - [RFC 4791: CalDAV](https://datatracker.ietf.org/doc/html/rfc4791)
 - [OWASP Cryptographic Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html)
+- [Client-Side Credential Storage (OS Keychains)](credential-storage.md)
