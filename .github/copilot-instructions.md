@@ -17,6 +17,7 @@ internal/
   crypto/            # Encryption helpers
   db/                # SQLite/PostgreSQL repositories
   models/            # Shared domain types (Task, Backend, errors)
+  web/               # Web UI handlers and filter logic (htmx/Go templates)
 liquibase/
   changelog.xml      # Master changelog
   changelogs/        # Individual changesets (YAML)
@@ -29,6 +30,7 @@ docs/                # design-overview.md, vtodo-mapping.md, agents/
 .github/
   copilot-instructions.md  # This file
   AGENTS.md          # Agent operating manual
+  CODEOWNERS         # Code ownership
   workflows/ci.yml   # CI: Liquibase validate+update, Go lint+test+build
 ```
 

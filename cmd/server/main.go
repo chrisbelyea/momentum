@@ -96,7 +96,6 @@ func main() {
 	addr := fmt.Sprintf(":%s", port)
 	log.Printf("Starting Momentum %s on %s", version, addr)
 	log.Printf("Database: %s", dbPath)
-
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
