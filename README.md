@@ -39,6 +39,18 @@ The fastest way to move the project forward is to assign open issues to the **Gi
 - After merging a PR, update [docs/status.md](docs/status.md) to reflect the new state.
 - If Copilot opens a `blocked` issue, add the missing context in the issue comments and re-assign.
 
+## Running the Server
+
+Momentum requires TLS. Set `TLS_CERT` and `TLS_KEY` before starting the server.
+See [docs/tls-setup.md](docs/tls-setup.md) for dev (mkcert / openssl) and production
+(Let's Encrypt) certificate setup.
+
+```bash
+export TLS_CERT=path/to/cert.pem
+export TLS_KEY=path/to/key.pem
+./bin/momentum-server          # listens on :8443 by default
+```
+
 ## CI/CD and Tooling (Overview)
 - Database migrations: Liquibase (recommended) or Flyway.
 - Initial CI: linting, unit/integration tests, security checks.

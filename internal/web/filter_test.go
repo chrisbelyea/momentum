@@ -11,8 +11,6 @@ import (
 	"github.com/chrisbelyea/momentum/internal/models"
 )
 
-func strPtr(s string) *string { return &s }
-
 // sampleTasks returns a set of tasks used across filter tests.
 func sampleTasks() []*models.Task {
 	t1 := time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC)
@@ -119,6 +117,42 @@ func TestApplyFilter_SortByCreatedAt_Desc(t *testing.T) {
 	// Gamma (t3=Jun) is the latest
 	if result[0].ID != 3 {
 		t.Errorf("expected Gamma first by created_at desc, got ID %d", result[0].ID)
+	}
+}
+
+func TestApplyFilter_SortByDueAt_Desc(t *testing.T) {
+	tasks := sampleTasks()
+	result := ApplyFilter(tasks, TaskFilter{Sort: "due_at", Order: "desc"})
+	// nil due dates must still sort last regardless of direction
+	last := result[len(result)-1]
+	secondLast := result[len(result)-2]
+	if last.DueAt != nil || secondLast.DueAt != nil {
+		t.Error("expected nil-DueAt tasks to sort last even when order is desc")
+	}
+	// Among tasks with due dates, most recent first: Gamma (Jun) then Beta (Mar)
+	if result[0].ID != 3 {
+		t.Errorf("expected Gamma (ID 3) first by due_at desc, got ID %d", result[0].ID)
+	}
+	if result[1].ID != 2 {
+		t.Errorf("expected Beta (ID 2) second by due_at desc, got ID %d", result[1].ID)
+	}
+}
+
+func TestApplyFilter_SortByCreatedAt_Asc(t *testing.T) {
+	tasks := sampleTasks()
+	result := ApplyFilter(tasks, TaskFilter{Sort: "created_at", Order: "asc"})
+	// Gamma (t3=Jun) is the latest, so must be last
+	if result[len(result)-1].ID != 3 {
+		t.Errorf("expected Gamma (ID 3) last by created_at asc, got ID %d", result[len(result)-1].ID)
+	}
+	// Beta (t2=Mar) is second latest, must be second-to-last
+	if result[len(result)-2].ID != 2 {
+		t.Errorf("expected Beta (ID 2) second-to-last by created_at asc, got ID %d", result[len(result)-2].ID)
+	}
+	// Alpha (1) and Delta (4) both have t1=Jan; they should be in the first two positions
+	firstTwo := map[int]bool{result[0].ID: true, result[1].ID: true}
+	if !firstTwo[1] || !firstTwo[4] {
+		t.Errorf("expected Alpha (1) and Delta (4) to be first two by created_at asc, got IDs %d and %d", result[0].ID, result[1].ID)
 	}
 }
 
