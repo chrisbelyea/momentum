@@ -7,6 +7,7 @@ Momentum brings your to-dos, reminders, and CalDAV tasks into one flow — visib
 - Specification: [requirements/specification.md](requirements/specification.md)
 - Features: [requirements/feature-list.md](requirements/feature-list.md)
 - Design Overview: [docs/design-overview.md](docs/design-overview.md)
+- Release Packaging: [docs/release-packaging.md](docs/release-packaging.md)
 - VTODO Mapping: [docs/vtodo-mapping.md](docs/vtodo-mapping.md)
 
 ## Continuing Development with Copilot

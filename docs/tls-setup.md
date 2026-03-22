@@ -7,13 +7,13 @@ HTTP requests are permanently redirected to HTTPS instead.
 
 ## Environment Variables
 
-| Variable            | Required | Default | Description                                      |
-|---------------------|----------|---------|--------------------------------------------------|
-| `TLS_CERT`          | Yes      | —                    | Path to the TLS certificate file (PEM format)                                    |
-| `TLS_KEY`           | Yes      | —                    | Path to the TLS private key file (PEM format)                                    |
-| `PORT`              | No       | `8443`               | HTTPS listen port                                                                |
-| `EXTERNAL_HOST`     | No       | `localhost:<PORT>`   | Public hostname (and optional port) used to build HTTP→HTTPS redirect URLs. Set this to your domain in production (e.g., `example.com` or `example.com:8443`) |
-| `HTTP_REDIRECT_PORT`| No       | —                    | If set, an HTTP server on this port redirects all requests to HTTPS              |
+| Variable             | Required | Default            | Description |
+|----------------------|----------|--------------------|-------------|
+| `TLS_CERT`           | Yes      | —                  | Path to the TLS certificate file (PEM format) |
+| `TLS_KEY`            | Yes      | —                  | Path to the TLS private key file (PEM format) |
+| `PORT`               | No       | `8443`             | HTTPS listen port |
+| `EXTERNAL_HOST`      | No       | `localhost:<PORT>` | Public hostname (and optional port) used to build HTTP→HTTPS redirect URLs. Set this to your domain in production (e.g., `example.com` or `example.com:8443`) |
+| `HTTP_REDIRECT_PORT` | No       | —                  | If set, an HTTP server on this port redirects all requests to HTTPS |
 
 > **Minimum TLS version**: TLS 1.3. Cipher suite selection is managed by Go's
 > `crypto/tls` package, which only enables strong suites by default.
