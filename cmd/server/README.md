@@ -21,6 +21,18 @@ go test ./...
 
 ## Running
 
+### Quick Start
+
+After building and initializing the database, simply run:
+
+```bash
+./bin/momentum-server
+```
+
+The server auto-generates a self-signed TLS certificate on first run and reuses it on
+subsequent runs. Open `https://localhost:8443` in your browser (accept the security
+warning — this is expected for auto-generated certificates).
+
 ### Prerequisites
 
 1. Initialize the database using Liquibase:
@@ -33,19 +45,37 @@ go test ./...
 2. Start the server:
 
 ```bash
-# Default: uses momentum.db in current directory, listens on port 8080
+# Default: uses momentum.db in current directory, listens on https://localhost:8443
 ./bin/momentum-server
 
 # Custom configuration via environment variables
-DB_PATH=/path/to/database.db PORT=3000 ./bin/momentum-server
+DB_PATH=/path/to/database.db PORT=8443 ./bin/momentum-server
 ```
+
+### Using custom TLS certificates
+
+Set `TLS_CERT` and `TLS_KEY` to your certificate and key files to skip auto-generation:
+
+```bash
+export TLS_CERT=/path/to/cert.pem
+export TLS_KEY=/path/to/key.pem
+./bin/momentum-server
+```
+
+See [docs/tls-setup.md](../../docs/tls-setup.md) for development and production
+certificate setup instructions.
 
 ## Configuration
 
 The server is configured via environment variables:
 
 - `DB_PATH`: Path to SQLite database file (default: `momentum.db`)
-- `PORT`: HTTP server port (default: `8080`)
+- `PORT`: HTTPS server port (default: `8443`)
+- `TLS_CERT`: Path to TLS certificate PEM file (optional; auto-generated if not set)
+- `TLS_KEY`: Path to TLS private key PEM file (optional; auto-generated if not set)
+- `HTTP_REDIRECT_PORT`: If set, starts an HTTP server that redirects to HTTPS
+- `EXTERNAL_HOST`: Public hostname used for HTTP→HTTPS redirect URLs (default: `localhost:<PORT>`)
+- `MOMENTUM_ENCRYPTION_KEY`: Encryption key for backend credentials (recommended for production)
 
 ## API Endpoints
 
