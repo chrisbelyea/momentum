@@ -87,6 +87,7 @@ archives:
           - zip
     files:
       - LICENSE
+      - web/**/*
 
 checksum:
   name_template: "checksums.txt"
