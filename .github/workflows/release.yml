@@ -117,9 +117,32 @@ jobs:
             exit 1
           fi
 
+  integration-test:
+    name: Integration Test (Linux)
+    needs: smoke-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Linux release artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release download "${{ github.ref_name }}" --pattern "momentum-server-linux-amd64.tar.gz" --repo "${{ github.repository }}"
+
+      - name: Extract artifact
+        run: tar -xzf "momentum-server-linux-amd64.tar.gz"
+
+      - name: Make integration test script executable
+        run: chmod +x scripts/release/integration-test.sh
+
+      - name: Run integration tests
+        run: scripts/release/integration-test.sh momentum-server-linux-amd64/momentum-server
+
   publish:
     name: Publish Release
-    needs: smoke-test
+    needs: integration-test
     runs-on: ubuntu-latest
 
     steps:

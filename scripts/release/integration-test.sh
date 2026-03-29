@@ -1,0 +1,203 @@
+#!/usr/bin/env bash
+# Integration test script for the Momentum server release binary.
+#
+# Tests complete user workflows including database initialization, task
+# creation, and task listing against a freshly started server instance.
+#
+# Usage:
+#   ./scripts/release/integration-test.sh <path-to-momentum-server-binary>
+#
+# Environment variables:
+#   PORT   HTTPS port for the test server (default: 18443, avoids conflict with 8443)
+
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Setup
+# ---------------------------------------------------------------------------
+
+BINARY="${1:?Usage: $(basename "$0") <path-to-momentum-server-binary>}"
+# Resolve to an absolute path so we can cd away from the original directory.
+BINARY_ABS="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+BINARY_DIR="$(cd "$(dirname "$1")" && pwd)"
+
+PORT="${PORT:-18443}"
+BASE_URL="https://localhost:${PORT}"
+SERVER_READY_TIMEOUT=15   # seconds to wait for the server health check
+SERVER_SHUTDOWN_WAIT=5    # seconds to wait for graceful shutdown before SIGKILL
+
+# Create a temp directory for the database and server logs.
+TEMP_DIR="$(mktemp -d)"
+DB_PATH="${TEMP_DIR}/integration-test.db"
+LOG_FILE="${TEMP_DIR}/server.log"
+
+SERVER_PID=""
+TESTS_PASSED=0
+TESTS_FAILED=0
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+cleanup() {
+  if [ -n "${SERVER_PID:-}" ]; then
+    echo "==> Stopping server (PID: ${SERVER_PID})..."
+    kill "${SERVER_PID}" 2>/dev/null || true
+    for i in $(seq 1 "${SERVER_SHUTDOWN_WAIT}"); do
+      sleep 1
+      kill -0 "${SERVER_PID}" 2>/dev/null || break
+    done
+    kill -9 "${SERVER_PID}" 2>/dev/null || true
+  fi
+  echo "==> Cleaning up temp directory: ${TEMP_DIR}"
+  rm -rf "${TEMP_DIR}"
+}
+trap cleanup EXIT
+
+pass() {
+  echo "  [PASS] $1"
+  TESTS_PASSED=$((TESTS_PASSED + 1))
+}
+
+fail() {
+  echo "  [FAIL] $1"
+  TESTS_FAILED=$((TESTS_FAILED + 1))
+}
+
+# ---------------------------------------------------------------------------
+# Start server
+# ---------------------------------------------------------------------------
+
+echo "========================================"
+echo "  Momentum Integration Tests"
+echo "========================================"
+echo "Binary:   ${BINARY_ABS}"
+echo "Port:     ${PORT}"
+echo "Database: ${DB_PATH}"
+echo ""
+
+echo "==> Starting server..."
+# Run the server from its own directory so it can locate the bundled
+# web/templates at the expected relative path.
+(
+  cd "${BINARY_DIR}"
+  DB_PATH="${DB_PATH}" PORT="${PORT}" "${BINARY_ABS}" >> "${LOG_FILE}" 2>&1 &
+  echo $!
+) > "${TEMP_DIR}/server.pid"
+SERVER_PID="$(cat "${TEMP_DIR}/server.pid")"
+echo "    Server PID: ${SERVER_PID}"
+
+# Poll the health endpoint for up to 15 seconds.
+# curl -k skips TLS verification because the server uses an auto-generated
+# self-signed development certificate.
+echo "==> Waiting for server to be ready..."
+READY=0
+for i in $(seq 1 "${SERVER_READY_TIMEOUT}"); do
+  sleep 1
+  echo "    Attempt ${i}/${SERVER_READY_TIMEOUT}..."
+  HTTP_CODE=$(curl -k -s -o /dev/null -w "%{http_code}" "${BASE_URL}/health" 2>/dev/null || echo "000")
+  if [ "${HTTP_CODE}" = "200" ]; then
+    READY=1
+    echo "    Server is ready!"
+    break
+  fi
+done
+
+if [ "${READY}" = "0" ]; then
+  echo ""
+  echo "==> FATAL: Server did not become ready within ${SERVER_READY_TIMEOUT} seconds."
+  echo "==> Server logs:"
+  cat "${LOG_FILE}"
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "==> Running integration tests..."
+echo ""
+
+# --- Test: Health endpoint ---
+echo "--- Health Endpoint ---"
+HTTP_CODE=$(curl -k -s -o /dev/null -w "%{http_code}" "${BASE_URL}/health" 2>/dev/null || echo "000")
+if [ "${HTTP_CODE}" = "200" ]; then
+  pass "/health returns 200 OK"
+else
+  fail "/health returned ${HTTP_CODE} (expected 200)"
+fi
+
+# --- Test: Web UI homepage loads without errors ---
+echo "--- Web UI Homepage ---"
+HOMEPAGE_BODY="$(mktemp)"
+HTTP_CODE=$(curl -k -s -o "${HOMEPAGE_BODY}" -w "%{http_code}" "${BASE_URL}/" 2>/dev/null || echo "000")
+if [ "${HTTP_CODE}" = "200" ]; then
+  pass "GET / returns 200 OK"
+else
+  fail "GET / returned ${HTTP_CODE} (expected 200). Body: $(cat "${HOMEPAGE_BODY}")"
+fi
+rm -f "${HOMEPAGE_BODY}"
+
+# --- Test: Database file was created ---
+echo "--- Database File ---"
+if [ -f "${DB_PATH}" ]; then
+  pass "Database file created at ${DB_PATH}"
+else
+  fail "Database file not found at ${DB_PATH}"
+fi
+
+# --- Test: Create a task ---
+echo "--- Create Task ---"
+CREATE_BODY="$(mktemp)"
+HTTP_CODE=$(curl -k -s -o "${CREATE_BODY}" -w "%{http_code}" \
+  -X POST "${BASE_URL}/caldav/tasks" \
+  -H "Content-Type: application/json" \
+  -d '{"backend_id": 1, "title": "Integration Test Task", "status": "NEEDS-ACTION"}' \
+  2>/dev/null || echo "000")
+CREATE_RESPONSE="$(cat "${CREATE_BODY}")"
+rm -f "${CREATE_BODY}"
+if [ "${HTTP_CODE}" = "201" ]; then
+  pass "POST /caldav/tasks returns 201 Created"
+else
+  fail "POST /caldav/tasks returned ${HTTP_CODE} (expected 201). Body: ${CREATE_RESPONSE}"
+fi
+
+# --- Test: List tasks ---
+echo "--- List Tasks ---"
+LIST_BODY="$(mktemp)"
+HTTP_CODE=$(curl -k -s -o "${LIST_BODY}" -w "%{http_code}" \
+  "${BASE_URL}/caldav/tasks?backend_id=1" \
+  2>/dev/null || echo "000")
+LIST_RESPONSE="$(cat "${LIST_BODY}")"
+rm -f "${LIST_BODY}"
+if [ "${HTTP_CODE}" = "200" ]; then
+  pass "GET /caldav/tasks?backend_id=1 returns 200 OK"
+  if echo "${LIST_RESPONSE}" | grep -q "Integration Test Task"; then
+    pass "Created task appears in task list"
+  else
+    fail "Created task not found in list. Body: ${LIST_RESPONSE}"
+  fi
+else
+  fail "GET /caldav/tasks?backend_id=1 returned ${HTTP_CODE} (expected 200). Body: ${LIST_RESPONSE}"
+fi
+
+# ---------------------------------------------------------------------------
+# Results
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "========================================"
+echo "  Results: ${TESTS_PASSED} passed, ${TESTS_FAILED} failed"
+echo "========================================"
+echo ""
+
+if [ "${TESTS_FAILED}" -gt 0 ]; then
+  echo "==> INTEGRATION TESTS FAILED"
+  echo ""
+  echo "==> Server logs:"
+  cat "${LOG_FILE}"
+  exit 1
+else
+  echo "==> INTEGRATION TESTS PASSED"
+fi
