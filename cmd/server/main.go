@@ -33,14 +33,23 @@ func main() {
 	// production to ensure the HTTP redirect target is always your own server.
 	externalHost := getEnv("EXTERNAL_HOST", "localhost:"+port)
 
-	// TLS is required; fail fast if cert/key are not provided.
+	// TLS is required. If cert/key are not provided, auto-generate a self-signed
+	// development certificate so the server works out-of-the-box.
 	if tlsCert == "" || tlsKey == "" {
-		log.Fatalf(
-			"TLS configuration is required.\n" +
-				"Set TLS_CERT and TLS_KEY environment variables to the paths of your\n" +
-				"certificate and private key files.\n" +
-				"See docs/tls-setup.md for dev and production setup instructions.",
-		)
+		log.Println("WARNING: No TLS certificates provided (TLS_CERT/TLS_KEY not set)")
+		certDir := crypto.DevCertDir()
+		var certErr error
+		tlsCert, tlsKey, certErr = crypto.GetOrCreateDevCert(certDir)
+		if certErr != nil {
+			log.Fatalf("Failed to generate development certificate: %v", certErr)
+		}
+		log.Printf("Using development certificate from: %s", certDir)
+		log.Println()
+		log.Println("WARNING: DEVELOPMENT MODE: Using auto-generated self-signed certificate")
+		log.Println("   Your browser will show security warnings. This is expected.")
+		log.Println("   For production, set TLS_CERT and TLS_KEY environment variables.")
+		log.Println("   See: docs/tls-setup.md")
+		log.Println()
 	}
 
 	// Initialize encryption
@@ -166,6 +175,7 @@ func main() {
 	// Start TLS server — TLS 1.3 minimum, strong cipher suites enforced by Go's crypto/tls.
 	addr := fmt.Sprintf(":%s", port)
 	log.Printf("Starting Momentum %s on %s (TLS)", version, addr)
+	log.Printf("Listening on https://localhost:%s", port)
 	log.Printf("Database: %s", dbPath)
 
 	server := &http.Server{

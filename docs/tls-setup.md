@@ -1,16 +1,20 @@
 # TLS Setup Guide
 
-Momentum enforces TLS-only connections. The server will not start unless `TLS_CERT` and
-`TLS_KEY` environment variables are set to valid certificate and private key files.
-Plain HTTP clients are rejected; if you configure the optional HTTP redirect port, plain
-HTTP requests are permanently redirected to HTTPS instead.
+Momentum enforces TLS-only connections. Plain HTTP clients are rejected; if you
+configure the optional HTTP redirect port, plain HTTP requests are permanently
+redirected to HTTPS instead.
+
+For quick evaluation and local development, the server **auto-generates** a
+self-signed certificate on first run (see [Auto-Generated Development Certificates](#auto-generated-development-certificates)).
+For production deployments, set `TLS_CERT` and `TLS_KEY` to the paths of a
+CA-issued certificate and key.
 
 ## Environment Variables
 
 | Variable             | Required | Default            | Description |
 |----------------------|----------|--------------------|-------------|
-| `TLS_CERT`           | Yes      | —                  | Path to the TLS certificate file (PEM format) |
-| `TLS_KEY`            | Yes      | —                  | Path to the TLS private key file (PEM format) |
+| `TLS_CERT`           | No       | auto-generated     | Path to the TLS certificate file (PEM format). If not set, a self-signed development certificate is auto-generated. |
+| `TLS_KEY`            | No       | auto-generated     | Path to the TLS private key file (PEM format). If not set, a self-signed development key is auto-generated. |
 | `PORT`               | No       | `8443`             | HTTPS listen port |
 | `EXTERNAL_HOST`      | No       | `localhost:<PORT>` | Public hostname (and optional port) used to build HTTP→HTTPS redirect URLs. Set this to your domain in production (e.g., `example.com` or `example.com:8443`) |
 | `HTTP_REDIRECT_PORT` | No       | —                  | If set, an HTTP server on this port redirects all requests to HTTPS |
@@ -20,9 +24,64 @@ HTTP requests are permanently redirected to HTTPS instead.
 
 ---
 
-## Development Setup
+## Auto-Generated Development Certificates
 
-For local development, generate a self-signed certificate using one of the methods below.
+When `TLS_CERT` and `TLS_KEY` are **not set**, Momentum automatically generates a
+self-signed TLS certificate on first run and reuses it on subsequent runs. This lets
+you run the server immediately without any certificate setup.
+
+### What happens on first run
+
+```
+WARNING: No TLS certificates provided (TLS_CERT/TLS_KEY not set)
+Generating self-signed development certificate...
+Certificate saved to: /home/user/.momentum/dev-certs/
+
+WARNING: DEVELOPMENT MODE: Using auto-generated self-signed certificate
+   Your browser will show security warnings. This is expected.
+   For production, set TLS_CERT and TLS_KEY environment variables.
+   See: docs/tls-setup.md
+```
+
+### Certificate details
+
+- **Key type**: ECDSA P-256
+- **Validity**: 1 year from generation date
+- **SANs**: `localhost`, `127.0.0.1`, `::1`
+- **Subject**: `CN=localhost, O=Momentum Development`
+- **Storage**: `~/.momentum/dev-certs/dev-cert.pem` and `dev-key.pem`
+  (Windows: `%USERPROFILE%\.momentum\dev-certs\`)
+
+### Resetting the certificate
+
+To force regeneration (e.g., after the certificate expires), delete the directory:
+
+```bash
+# Linux / macOS
+rm -rf ~/.momentum/dev-certs/
+
+# Windows (PowerShell)
+Remove-Item -Recurse "$env:USERPROFILE\.momentum\dev-certs"
+```
+
+The new certificate will be generated on the next server start.
+
+### Browser trust
+
+Auto-generated certificates are **not trusted by browsers**. You will see a security
+warning the first time you open `https://localhost:8443`. This is expected for
+development use. Click through the warning (or add a browser exception) to proceed.
+
+For a trusted development certificate that avoids browser warnings, use
+[mkcert](#option-a-mkcert-recommended) instead.
+
+---
+
+## Development Setup (Trusted Certificates)
+
+The auto-generated certificate works for quick evaluation, but browsers will show a
+security warning because it is not trusted. To avoid browser warnings in local
+development, use one of the methods below to generate a locally-trusted certificate.
 
 ### Option A: mkcert (recommended)
 
