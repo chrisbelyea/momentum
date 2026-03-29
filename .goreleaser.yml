@@ -87,11 +87,9 @@ archives:
           - zip
     files:
       - LICENSE
-      # Include web templates so the server can render the UI on startup.
+      # Include web templates and static assets so the server can render the UI on startup.
       # Without these files the binary panics with: html/template: pattern matches no files.
-      - web/templates/*.html
-      # Include static web assets (PWA manifest, icons, service worker).
-      - web/static/**
+      - web/**/*
 
 checksum:
   name_template: "checksums.txt"
