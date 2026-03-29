@@ -1,0 +1,113 @@
+# GoReleaser configuration for Momentum server cross-platform releases.
+# Runs inside the goreleaser-cross Docker image to enable CGO cross-compilation
+# for all target platforms without a native compiler per platform.
+#
+# Usage: triggered automatically by .github/workflows/release.yml on `v*` tags.
+# Local dry-run: goreleaser release --snapshot --clean
+#
+# References:
+#   - Issue: feat: Automated Release Workflow with GitHub Releases
+#   - docs/release-packaging.md
+version: 2
+
+project_name: momentum
+
+before:
+  hooks:
+    - go mod download
+    - go mod verify
+
+builds:
+  - id: momentum-server
+    main: ./cmd/server
+    binary: momentum-server
+    flags:
+      - -v
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      # Windows ARM64 is not a supported target
+      - goos: windows
+        goarch: arm64
+    overrides:
+      # Linux x86-64: use the GNU cross-compiler present in goreleaser-cross
+      - goos: linux
+        goarch: amd64
+        env:
+          - CGO_ENABLED=1
+          - CC=x86_64-linux-gnu-gcc
+          - CXX=x86_64-linux-gnu-g++
+      # Linux ARM64: use the aarch64 GNU cross-compiler
+      - goos: linux
+        goarch: arm64
+        env:
+          - CGO_ENABLED=1
+          - CC=aarch64-linux-gnu-gcc
+          - CXX=aarch64-linux-gnu-g++
+      # macOS Intel: use osxcross o64-clang provided by goreleaser-cross
+      - goos: darwin
+        goarch: amd64
+        env:
+          - CGO_ENABLED=1
+          - CC=o64-clang
+          - CXX=o64-clang++
+      # macOS Apple Silicon: use osxcross oa64-clang provided by goreleaser-cross
+      - goos: darwin
+        goarch: arm64
+        env:
+          - CGO_ENABLED=1
+          - CC=oa64-clang
+          - CXX=oa64-clang++
+      # Windows x86-64: use MinGW-w64 cross-compiler
+      - goos: windows
+        goarch: amd64
+        env:
+          - CGO_ENABLED=1
+          - CC=x86_64-w64-mingw32-gcc
+          - CXX=x86_64-w64-mingw32-g++
+
+archives:
+  - id: default
+    # tar.gz for Linux/macOS; zip for Windows
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}-server-{{ .Os }}-{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - LICENSE
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"
+
+release:
+  github:
+    owner: chrisbelyea
+    name: momentum
+  draft: false
+  prerelease: auto
+  name_template: "{{ .Tag }}"
+  footer: |
+    {{ if .PreviousTag }}**Full Changelog**: https://github.com/chrisbelyea/momentum/compare/{{ .PreviousTag }}...{{ .Tag }}{{ end }}

@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Required to create GitHub Releases and upload assets
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    name: Build and Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history required so `git describe` works correctly for version strings
+          fetch-depth: 0
+
+      - name: Run GoReleaser
+        # goreleaser-cross bundles GoReleaser, Go, and all cross-compilation
+        # toolchains (osxcross for macOS, MinGW-w64 for Windows, aarch64-linux-gnu
+        # for Linux ARM64). The image version tracks the bundled Go version.
+        run: |
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/workspace" \
+            -w /workspace \
+            -e GITHUB_TOKEN \
+            ghcr.io/goreleaser/goreleaser-cross:v1.25.8 \
+            release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
