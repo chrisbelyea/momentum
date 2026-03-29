@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   goreleaser:
-    name: Build and Release
+    name: Build and Release (Draft)
     runs-on: ubuntu-latest
 
     steps:
@@ -34,3 +34,96 @@ jobs:
             release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  smoke-test:
+    name: Smoke Test (${{ matrix.os }})
+    needs: goreleaser
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Run all matrix legs so we can see all failures at once
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: momentum-server-linux-amd64.tar.gz
+            dir: momentum-server-linux-amd64
+            binary: ./momentum-server
+          # macos-13 is the last Intel (x86_64) macOS runner, matching the darwin-amd64 build
+          - os: macos-13
+            artifact: momentum-server-darwin-amd64.tar.gz
+            dir: momentum-server-darwin-amd64
+            binary: ./momentum-server
+          - os: windows-latest
+            artifact: momentum-server-windows-amd64.zip
+            dir: momentum-server-windows-amd64
+            binary: ./momentum-server.exe
+
+    steps:
+      - name: Download release artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release download "${{ github.ref_name }}" --pattern "${{ matrix.artifact }}" --repo "${{ github.repository }}"
+
+      - name: Extract artifact (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: tar -xzf "${{ matrix.artifact }}"
+
+      - name: Extract artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Expand-Archive -Path "${{ matrix.artifact }}" -DestinationPath .
+
+      - name: Start server and verify health endpoint
+        working-directory: ${{ matrix.dir }}
+        shell: bash
+        run: |
+          # Start the server in the background from the extraction directory so
+          # it can locate the bundled web/templates at the expected relative path.
+          "${{ matrix.binary }}" &
+          SERVER_PID=$!
+          echo "Server started with PID $SERVER_PID"
+
+          # Poll the health endpoint for up to 10 seconds.
+          # curl -k skips TLS verification because the server uses an auto-generated
+          # self-signed development certificate (no trusted CA in CI environments).
+          HEALTH_OK=0
+          for i in $(seq 1 10); do
+            sleep 1
+            echo "Health check attempt $i/10..."
+            HTTP_CODE=$(curl -k -s -o /dev/null -w "%{http_code}" https://localhost:8443/health 2>/dev/null || echo "000")
+            echo "  HTTP status: $HTTP_CODE"
+            if [ "$HTTP_CODE" = "200" ]; then
+              HEALTH_OK=1
+              echo "  Server is healthy!"
+              break
+            fi
+          done
+
+          # Stop the server: send SIGTERM and wait briefly, then SIGKILL if still running.
+          # On Windows with Git Bash, kill sends SIGTERM to the process started in
+          # this same shell session, which is sufficient to terminate the server.
+          echo "Stopping server (PID: $SERVER_PID)..."
+          kill "$SERVER_PID" 2>/dev/null || true
+          for i in $(seq 1 5); do
+            sleep 1
+            kill -0 "$SERVER_PID" 2>/dev/null || break
+          done
+          kill -9 "$SERVER_PID" 2>/dev/null || true
+
+          if [ "$HEALTH_OK" = "1" ]; then
+            echo "Smoke test PASSED: /health returned 200 OK"
+          else
+            echo "Smoke test FAILED: /health did not return 200 within 10 seconds"
+            exit 1
+          fi
+
+  publish:
+    name: Publish Release
+    needs: smoke-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"

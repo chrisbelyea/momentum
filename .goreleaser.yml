@@ -87,6 +87,8 @@ archives:
           - zip
     files:
       - LICENSE
+      # Include web templates and static assets so the server can render the UI on startup.
+      # Without these files the binary panics with: html/template: pattern matches no files.
       - web/**/*
 
 checksum:
@@ -107,7 +109,7 @@ release:
   github:
     owner: chrisbelyea
     name: momentum
-  draft: false
+  draft: true
   prerelease: auto
   name_template: "{{ .Tag }}"
   footer: |
