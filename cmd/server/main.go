@@ -74,6 +74,11 @@ func main() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
+	// Initialize schema on first run (no-op when schema already exists)
+	if err := db.InitializeSchema(database); err != nil {
+		log.Fatalf("Failed to initialize database schema: %v", err)
+	}
+
 	// Initialize repositories
 	taskRepo := db.NewTaskRepository(database)
 	backendRepo := db.NewBackendRepository(database)
