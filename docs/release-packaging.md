@@ -1,8 +1,90 @@
 # Release Packaging
 
-This document describes how to build distributable release artifacts for Momentum locally. It covers the server single-executable and the PWA web assets.
+This document describes how Momentum releases are created, where to download pre-built binaries, and how to build release artifacts locally.
 
 > **References**: [Specification §13 Deployment](../requirements/specification.md#13-deployment) · [Specification §14 Tooling and CI/CD](../requirements/specification.md#14-tooling-and-cicd)
+
+---
+
+## Automated Releases (GitHub Releases)
+
+Momentum uses [GoReleaser](https://goreleaser.com/) via a GitHub Actions workflow to automate cross-platform builds and publish GitHub Releases whenever a version tag is pushed.
+
+### Creating a New Release
+
+1. Ensure all changes are merged to `main` and CI is passing.
+2. Create and push a version tag following [Semantic Versioning](https://semver.org/):
+
+   ```bash
+   git tag v1.2.3
+   git push origin v1.2.3
+   ```
+
+3. The [Release workflow](../.github/workflows/release.yml) triggers automatically on the tag push.  It builds binaries for all supported platforms and publishes a [GitHub Release](https://github.com/chrisbelyea/momentum/releases) with all artifacts attached.
+
+### Downloading Pre-built Binaries
+
+Visit the [Releases page](https://github.com/chrisbelyea/momentum/releases) and download the archive for your platform:
+
+| Platform | Archive |
+|----------|---------|
+| Linux x86-64 | `momentum-server-linux-amd64.tar.gz` |
+| Linux ARM64 | `momentum-server-linux-arm64.tar.gz` |
+| macOS Apple Silicon | `momentum-server-darwin-arm64.tar.gz` |
+| macOS Intel | `momentum-server-darwin-amd64.tar.gz` |
+| Windows x86-64 | `momentum-server-windows-amd64.zip` |
+
+Each release also includes a `checksums.txt` file containing SHA-256 checksums for all archives.
+
+### Verifying Checksums
+
+After downloading, verify the archive against the published checksum:
+
+**Linux / macOS:**
+
+```bash
+# Download the archive and checksums file, then verify:
+sha256sum --check --ignore-missing checksums.txt
+# or on macOS:
+shasum -a 256 --check --ignore-missing checksums.txt
+```
+
+**Windows (PowerShell):**
+
+```powershell
+(Get-FileHash momentum-server-windows-amd64.zip -Algorithm SHA256).Hash
+# Compare with the expected value in checksums.txt
+```
+
+### Testing a Release Before Tagging
+
+To test the workflow without creating a real release, push a pre-release tag:
+
+```bash
+git tag v0.0.1-test
+git push origin v0.0.1-test
+```
+
+Clean up after verification:
+
+```bash
+git tag -d v0.0.1-test
+git push origin :refs/tags/v0.0.1-test
+gh release delete v0.0.1-test --yes
+```
+
+### Release Workflow Details
+
+The release pipeline is defined in [`.github/workflows/release.yml`](../.github/workflows/release.yml) and [`.goreleaser.yml`](../.goreleaser.yml).
+
+| Detail | Value |
+|--------|-------|
+| Trigger | Push to a `v*` tag |
+| Build tool | [GoReleaser](https://goreleaser.com/) inside the [`goreleaser-cross`](https://github.com/goreleaser/goreleaser-cross) Docker image |
+| Cross-compilation | Linux ARM64 via `aarch64-linux-gnu-gcc`; Windows via MinGW-w64; macOS via osxcross |
+| Archive format | `.tar.gz` (Linux/macOS), `.zip` (Windows) |
+| Checksum | SHA-256, collected in `checksums.txt` |
+| Release notes | Auto-generated from commit history |
 
 ---
 
@@ -216,4 +298,6 @@ dist/
 
 ## CI Artifacts
 
-The `build-and-test-go` CI job builds the server binary on every push and pull request and uploads it as a GitHub Actions artifact named `momentum-server` (retained for 30 days). See [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) for details.
+The `build-and-test-go` CI job builds the server binary on every push and pull request and uploads it as a GitHub Actions artifact named `momentum-server` (retained for 30 days). These CI artifacts are for development verification only — use [GitHub Releases](https://github.com/chrisbelyea/momentum/releases) for stable, versioned binaries intended for deployment.
+
+See [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) for CI details and [`.github/workflows/release.yml`](../.github/workflows/release.yml) for the release workflow.
