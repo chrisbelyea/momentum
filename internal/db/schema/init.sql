@@ -32,14 +32,12 @@ CREATE TABLE IF NOT EXISTS tasks (
     description TEXT,
     status VARCHAR(50) NOT NULL,
     priority INTEGER NOT NULL DEFAULT 0,
-    due_date TIMESTAMP,
-    vtodo_data TEXT,
-    sync_status VARCHAR(50) NOT NULL DEFAULT 'synced',
-    last_synced_at TIMESTAMP,
+    due_at TIMESTAMP,
+    tags_json TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (backend_id) REFERENCES backends(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_backend_id ON tasks(backend_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
+CREATE INDEX IF NOT EXISTS idx_tasks_due_at ON tasks(due_at);
