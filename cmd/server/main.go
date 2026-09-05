@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"database/sql"
 	"fmt"
@@ -8,6 +9,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/chrisbelyea/momentum/internal/backend"
@@ -193,8 +196,22 @@ func main() {
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
 	}
-	if err := server.ListenAndServeTLS(tlsCert, tlsKey); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
+	serverErr := make(chan error, 1)
+	go func() { serverErr <- server.ListenAndServeTLS(tlsCert, tlsKey) }()
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	select {
+	case err := <-serverErr:
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed to start: %v", err)
+		}
+	case <-signals:
+		log.Println("Shutdown signal received; stopping Momentum gracefully")
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			log.Printf("Graceful shutdown failed: %v", err)
+		}
 	}
 }
 
