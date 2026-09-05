@@ -4,37 +4,52 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
-	"log"
 )
 
 //go:embed schema/init.sql
 var initSchemaSQL string
 
-// InitializeSchema checks whether the database schema exists and creates it if
-// not. This enables zero-configuration first run: when the database file is new
-// or empty the schema is automatically initialized from the embedded SQL.
-//
-// This function is SQLite-specific (it queries sqlite_master) and must be
-// called before any other database operations, from a single goroutine during
-// startup. It uses the presence of the 'tasks' table as a proxy for the full
-// schema because tasks is the last table created in the changeset sequence.
+// InitializeSchema creates a fresh database or upgrades an older shipped
+// shape. The migration ledger prevents a partial schema from being treated as
+// current and makes repeated startup safe.
 func InitializeSchema(database *sql.DB) error {
-	var count int
-	err := database.QueryRow(
-		"SELECT count(*) FROM sqlite_master WHERE type='table' AND name='tasks'",
-	).Scan(&count)
+	if _, err := database.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		return err
+	}
+	if _, err := database.Exec(`CREATE TABLE IF NOT EXISTS momentum_schema_migrations (version INTEGER PRIMARY KEY, applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+		return err
+	}
+	current, err := currentSchema(database)
 	if err != nil {
-		return fmt.Errorf("failed to check schema: %w", err)
+		return err
 	}
+	if !current {
+		if err := migrateLegacySchema(database); err != nil {
+			return fmt.Errorf("migrate database schema: %w", err)
+		}
+	}
+	_, err = database.Exec("INSERT OR REPLACE INTO momentum_schema_migrations(version) VALUES (1)")
+	return err
+}
 
-	if count > 0 {
-		return nil
+func currentSchema(database *sql.DB) (bool, error) {
+	for _, item := range []struct{ table, column string }{{"users", "id"}, {"users", "updated_at"}, {"backends", "id"}, {"backends", "backend_type"}, {"backends", "config_encrypted"}, {"backends", "updated_at"}, {"tasks", "id"}, {"tasks", "due_at"}, {"tasks", "tags_json"}, {"tasks", "updated_at"}} {
+		var n int
+		if err := database.QueryRow("SELECT count(*) FROM pragma_table_info(?) WHERE name=?", item.table, item.column).Scan(&n); err != nil {
+			return false, err
+		}
+		if n != 1 {
+			return false, nil
+		}
 	}
-
-	log.Println("Initializing database schema...")
-	if _, err := database.Exec(initSchemaSQL); err != nil {
-		return fmt.Errorf("failed to initialize schema: %w", err)
+	for _, table := range []string{"users", "backends", "tasks"} {
+		var typ string
+		if err := database.QueryRow("SELECT type FROM pragma_table_info(?) WHERE name='id'", table).Scan(&typ); err != nil {
+			return false, err
+		}
+		if typ != "INTEGER" {
+			return false, nil
+		}
 	}
-	log.Println("✓ Database schema initialized successfully")
-	return nil
+	return true, nil
 }

@@ -159,8 +159,53 @@ CREATE_RESPONSE="$(cat "${CREATE_BODY}")"
 rm -f "${CREATE_BODY}"
 if [ "${HTTP_CODE}" = "201" ]; then
   pass "POST /caldav/tasks returns 201 Created"
+	TASK_ID="$(printf '%s' "${CREATE_RESPONSE}" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')"
+	if [ -z "${TASK_ID}" ]; then
+		fail "POST response did not contain a task ID: ${CREATE_RESPONSE}"
+	fi
 else
   fail "POST /caldav/tasks returned ${HTTP_CODE} (expected 201). Body: ${CREATE_RESPONSE}"
+fi
+
+# --- Test: Update and persist the created task ---
+echo "--- Update Task ---"
+if [ -n "${TASK_ID:-}" ]; then
+  UPDATE_BODY="$(mktemp)"
+  HTTP_CODE=$(curl -k -s -o "${UPDATE_BODY}" -w "%{http_code}" \
+    -X PUT "${BASE_URL}/caldav/tasks/${TASK_ID}" \
+    -H "Content-Type: application/json" \
+    -d '{"backend_id": 1, "title": "Updated Integration Task", "status": "IN-PROCESS"}' \
+    2>/dev/null || echo "000")
+  UPDATE_RESPONSE="$(cat "${UPDATE_BODY}")"
+  rm -f "${UPDATE_BODY}"
+  if [ "${HTTP_CODE}" = "200" ]; then
+    pass "PUT /caldav/tasks/${TASK_ID} returns 200 OK"
+  else
+    fail "PUT /caldav/tasks/${TASK_ID} returned ${HTTP_CODE}. Body: ${UPDATE_RESPONSE}"
+  fi
+
+  PERSIST_BODY="$(mktemp)"
+  HTTP_CODE=$(curl -k -s -o "${PERSIST_BODY}" -w "%{http_code}" \
+    "${BASE_URL}/caldav/tasks/${TASK_ID}" 2>/dev/null || echo "000")
+  PERSIST_RESPONSE="$(cat "${PERSIST_BODY}")"
+  rm -f "${PERSIST_BODY}"
+  if [ "${HTTP_CODE}" = "200" ] && echo "${PERSIST_RESPONSE}" | grep -q 'Updated Integration Task'; then
+    pass "Updated task persists and is readable"
+  else
+    fail "Updated task was not persisted. HTTP ${HTTP_CODE}; Body: ${PERSIST_RESPONSE}"
+  fi
+fi
+
+# --- Test: Delete the created task ---
+echo "--- Delete Task ---"
+if [ -n "${TASK_ID:-}" ]; then
+  HTTP_CODE=$(curl -k -s -o /dev/null -w "%{http_code}" -X DELETE \
+    "${BASE_URL}/caldav/tasks/${TASK_ID}" 2>/dev/null || echo "000")
+  if [ "${HTTP_CODE}" = "204" ]; then
+    pass "DELETE /caldav/tasks/${TASK_ID} returns 204 No Content"
+  else
+    fail "DELETE /caldav/tasks/${TASK_ID} returned ${HTTP_CODE}"
+  fi
 fi
 
 # --- Test: List tasks ---
@@ -173,10 +218,10 @@ LIST_RESPONSE="$(cat "${LIST_BODY}")"
 rm -f "${LIST_BODY}"
 if [ "${HTTP_CODE}" = "200" ]; then
   pass "GET /caldav/tasks?backend_id=1 returns 200 OK"
-  if echo "${LIST_RESPONSE}" | grep -q "Integration Test Task"; then
-    pass "Created task appears in task list"
+  if ! echo "${LIST_RESPONSE}" | grep -q "Updated Integration Task"; then
+    pass "Deleted task is absent from task list"
   else
-    fail "Created task not found in list. Body: ${LIST_RESPONSE}"
+    fail "Deleted task remains in task list. Body: ${LIST_RESPONSE}"
   fi
 else
   fail "GET /caldav/tasks?backend_id=1 returned ${HTTP_CODE} (expected 200). Body: ${LIST_RESPONSE}"

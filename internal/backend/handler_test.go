@@ -27,32 +27,12 @@ func setupBackendHandlerTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("Failed to open test database: %v", err)
 	}
 
-	// Create schema
-	schema := `
-		CREATE TABLE users (
-			id VARCHAR(36) PRIMARY KEY NOT NULL,
-			email VARCHAR(255) NOT NULL UNIQUE,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		);
-		CREATE TABLE backends (
-			id VARCHAR(36) PRIMARY KEY NOT NULL,
-			user_id VARCHAR(36) NOT NULL,
-			backend_type VARCHAR(50) NOT NULL,
-			name VARCHAR(255) NOT NULL,
-			config_encrypted TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-		);
-		CREATE INDEX idx_backends_user_id ON backends(user_id);
-	`
-
-	if _, err := database.Exec(schema); err != nil {
-		t.Fatalf("Failed to create test schema: %v", err)
+	if err := db.InitializeSchema(database); err != nil {
+		t.Fatalf("Failed to initialize test schema: %v", err)
 	}
 
 	// Create test user
-	database.Exec("INSERT INTO users (id, email) VALUES ('user-1', 'test@example.com')")
+	database.Exec("INSERT INTO users (id, email) VALUES (1, 'test@example.com')")
 
 	return database
 }
@@ -72,7 +52,7 @@ func TestHandler_CreateBackend(t *testing.T) {
 		{
 			name: "create internal backend",
 			backend: models.Backend{
-				UserID: "user-1",
+				UserID: 1,
 				Type:   models.BackendTypeInternal,
 				Name:   "Internal Backend",
 			},
@@ -81,7 +61,7 @@ func TestHandler_CreateBackend(t *testing.T) {
 		{
 			name: "create external caldav backend",
 			backend: models.Backend{
-				UserID: "user-1",
+				UserID: 1,
 				Type:   models.BackendTypeExternalCalDAV,
 				Name:   "External CalDAV",
 				Config: &models.BackendConfig{
@@ -118,7 +98,7 @@ func TestHandler_CreateBackend(t *testing.T) {
 				var created models.Backend
 				json.NewDecoder(rec.Body).Decode(&created)
 
-				if created.ID == "" {
+				if created.ID == 0 {
 					t.Error("Expected backend ID to be generated")
 				}
 				if created.Name != tt.backend.Name {
@@ -143,14 +123,14 @@ func TestHandler_ListBackends(t *testing.T) {
 	// Create test backends
 	backends := []*models.Backend{
 		{
-			ID:     "backend-1",
-			UserID: "user-1",
+			ID:     1,
+			UserID: 1,
 			Type:   models.BackendTypeInternal,
 			Name:   "Backend 1",
 		},
 		{
-			ID:     "backend-2",
-			UserID: "user-1",
+			ID:     2,
+			UserID: 1,
 			Type:   models.BackendTypeExternalCalDAV,
 			Name:   "Backend 2",
 			Config: &models.BackendConfig{
@@ -166,7 +146,7 @@ func TestHandler_ListBackends(t *testing.T) {
 	}
 
 	// List backends
-	req := httptest.NewRequest(http.MethodGet, "/backends?user_id=user-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/backends?user_id=1", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleBackends(rec, req)
@@ -178,8 +158,8 @@ func TestHandler_ListBackends(t *testing.T) {
 	var retrieved []*models.Backend
 	json.NewDecoder(rec.Body).Decode(&retrieved)
 
-	if len(retrieved) != len(backends) {
-		t.Errorf("Expected %d backends, got %d", len(backends), len(retrieved))
+	if len(retrieved) != len(backends)+1 {
+		t.Errorf("Expected %d backends, got %d", len(backends)+1, len(retrieved))
 	}
 
 	// Verify passwords are sanitized
@@ -199,15 +179,15 @@ func TestHandler_GetBackend(t *testing.T) {
 
 	// Create a test backend
 	backend := &models.Backend{
-		ID:     "backend-1",
-		UserID: "user-1",
+		ID:     1,
+		UserID: 1,
 		Type:   models.BackendTypeInternal,
 		Name:   "Test Backend",
 	}
 	backendRepo.Create(backend)
 
 	// Get backend
-	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/backends/%s", backend.ID), nil)
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/backends/%d", backend.ID), nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleBackend(rec, req)
@@ -220,7 +200,7 @@ func TestHandler_GetBackend(t *testing.T) {
 	json.NewDecoder(rec.Body).Decode(&retrieved)
 
 	if retrieved.ID != backend.ID {
-		t.Errorf("Expected ID %s, got %s", backend.ID, retrieved.ID)
+		t.Errorf("Expected ID %d, got %d", backend.ID, retrieved.ID)
 	}
 }
 
@@ -233,8 +213,8 @@ func TestHandler_UpdateBackend(t *testing.T) {
 
 	// Create a backend
 	backend := &models.Backend{
-		ID:     "backend-1",
-		UserID: "user-1",
+		ID:     1,
+		UserID: 1,
 		Type:   models.BackendTypeInternal,
 		Name:   "Original Name",
 	}
@@ -243,7 +223,7 @@ func TestHandler_UpdateBackend(t *testing.T) {
 	// Update backend
 	backend.Name = "Updated Name"
 	body, _ := json.Marshal(backend)
-	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/backends/%s", backend.ID), bytes.NewBuffer(body))
+	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/backends/%d", backend.ID), bytes.NewBuffer(body))
 	rec := httptest.NewRecorder()
 
 	handler.HandleBackend(rec, req)
@@ -269,15 +249,15 @@ func TestHandler_DeleteBackend(t *testing.T) {
 
 	// Create a backend
 	backend := &models.Backend{
-		ID:     "backend-1",
-		UserID: "user-1",
+		ID:     1,
+		UserID: 1,
 		Type:   models.BackendTypeInternal,
 		Name:   "Test Backend",
 	}
 	backendRepo.Create(backend)
 
 	// Delete backend
-	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/backends/%s", backend.ID), nil)
+	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/backends/%d", backend.ID), nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleBackend(rec, req)
@@ -315,7 +295,7 @@ func TestHandler_ValidateConnection(t *testing.T) {
 		{
 			name: "valid caldav connection",
 			backend: models.Backend{
-				UserID: "user-1",
+				UserID: 1,
 				Type:   models.BackendTypeExternalCalDAV,
 				Name:   "Test CalDAV",
 				Config: &models.BackendConfig{
@@ -391,7 +371,7 @@ func TestHandler_MethodNotAllowed(t *testing.T) {
 	}{
 		{"PATCH on /backends", "/backends", http.MethodPatch},
 		{"OPTIONS on /backends", "/backends", http.MethodOptions},
-		{"PATCH on /backends/{id}", "/backends/backend-1", http.MethodPatch},
+		{"PATCH on /backends/{id}", "/backends/1", http.MethodPatch},
 	}
 
 	for _, tt := range tests {
