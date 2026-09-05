@@ -21,32 +21,12 @@ func setupBackendTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("Failed to open test database: %v", err)
 	}
 
-	// Create schema
-	schema := `
-		CREATE TABLE users (
-			id VARCHAR(36) PRIMARY KEY NOT NULL,
-			email VARCHAR(255) NOT NULL UNIQUE,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		);
-		CREATE TABLE backends (
-			id VARCHAR(36) PRIMARY KEY NOT NULL,
-			user_id VARCHAR(36) NOT NULL,
-			backend_type VARCHAR(50) NOT NULL,
-			name VARCHAR(255) NOT NULL,
-			config_encrypted TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-		);
-		CREATE INDEX idx_backends_user_id ON backends(user_id);
-	`
-
-	if _, err := database.Exec(schema); err != nil {
-		t.Fatalf("Failed to create test schema: %v", err)
+	if err := InitializeSchema(database); err != nil {
+		t.Fatalf("Failed to initialize test schema: %v", err)
 	}
 
 	// Create test user
-	database.Exec("INSERT INTO users (id, email) VALUES ('user-1', 'test@example.com')")
+	database.Exec("INSERT INTO users (id, email) VALUES (1, 'test@example.com')")
 
 	return database
 }
@@ -65,8 +45,8 @@ func TestBackendRepository_Create(t *testing.T) {
 		{
 			name: "internal backend",
 			backend: &models.Backend{
-				ID:     "backend-1",
-				UserID: "user-1",
+				ID:     1,
+				UserID: 1,
 				Type:   models.BackendTypeInternal,
 				Name:   "Internal CalDAV",
 			},
@@ -75,8 +55,8 @@ func TestBackendRepository_Create(t *testing.T) {
 		{
 			name: "external caldav with basic auth",
 			backend: &models.Backend{
-				ID:     "backend-2",
-				UserID: "user-1",
+				ID:     2,
+				UserID: 1,
 				Type:   models.BackendTypeExternalCalDAV,
 				Name:   "External CalDAV Server",
 				Config: &models.BackendConfig{
@@ -90,8 +70,8 @@ func TestBackendRepository_Create(t *testing.T) {
 		{
 			name: "external caldav with client cert",
 			backend: &models.Backend{
-				ID:     "backend-3",
-				UserID: "user-1",
+				ID:     3,
+				UserID: 1,
 				Type:   models.BackendTypeExternalCalDAV,
 				Name:   "CalDAV with Cert",
 				Config: &models.BackendConfig{
@@ -105,7 +85,7 @@ func TestBackendRepository_Create(t *testing.T) {
 		{
 			name: "invalid - missing user_id",
 			backend: &models.Backend{
-				ID:   "backend-4",
+				ID:   4,
 				Type: models.BackendTypeInternal,
 				Name: "Test Backend",
 			},
@@ -114,8 +94,8 @@ func TestBackendRepository_Create(t *testing.T) {
 		{
 			name: "invalid - external caldav without config",
 			backend: &models.Backend{
-				ID:     "backend-5",
-				UserID: "user-1",
+				ID:     5,
+				UserID: 1,
 				Type:   models.BackendTypeExternalCalDAV,
 				Name:   "Invalid Backend",
 			},
@@ -160,8 +140,8 @@ func TestBackendRepository_Get(t *testing.T) {
 
 	// Create a test backend
 	backend := &models.Backend{
-		ID:     "backend-1",
-		UserID: "user-1",
+		ID:     1,
+		UserID: 1,
 		Type:   models.BackendTypeExternalCalDAV,
 		Name:   "Test Backend",
 		Config: &models.BackendConfig{
@@ -187,7 +167,7 @@ func TestBackendRepository_Get(t *testing.T) {
 
 	// Verify fields
 	if retrieved.ID != backend.ID {
-		t.Errorf("ID mismatch: got %s, want %s", retrieved.ID, backend.ID)
+		t.Errorf("ID mismatch: got %d, want %d", retrieved.ID, backend.ID)
 	}
 	if retrieved.Name != backend.Name {
 		t.Errorf("Name mismatch: got %s, want %s", retrieved.Name, backend.Name)
@@ -211,7 +191,7 @@ func TestBackendRepository_Get(t *testing.T) {
 	}
 
 	// Test non-existent backend
-	nonExistent, err := repo.Get("non-existent-id")
+	nonExistent, err := repo.Get(999)
 	if err != nil {
 		t.Errorf("Get() should not error for non-existent backend: %v", err)
 	}
@@ -229,14 +209,14 @@ func TestBackendRepository_List(t *testing.T) {
 	// Create multiple backends
 	backends := []*models.Backend{
 		{
-			ID:     "backend-1",
-			UserID: "user-1",
+			ID:     1,
+			UserID: 1,
 			Type:   models.BackendTypeInternal,
 			Name:   "Internal Backend",
 		},
 		{
-			ID:     "backend-2",
-			UserID: "user-1",
+			ID:     2,
+			UserID: 1,
 			Type:   models.BackendTypeExternalCalDAV,
 			Name:   "External Backend",
 			Config: &models.BackendConfig{
@@ -254,17 +234,17 @@ func TestBackendRepository_List(t *testing.T) {
 	}
 
 	// List backends
-	retrieved, err := repo.List("user-1")
+	retrieved, err := repo.List(1)
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
 
-	if len(retrieved) != len(backends) {
-		t.Errorf("Expected %d backends, got %d", len(backends), len(retrieved))
+	if len(retrieved) != len(backends)+1 {
+		t.Errorf("Expected %d backends, got %d", len(backends)+1, len(retrieved))
 	}
 
 	// List for non-existent user
-	empty, err := repo.List("non-existent-user")
+	empty, err := repo.List(999)
 	if err != nil {
 		t.Errorf("List() should not error for non-existent user: %v", err)
 	}
@@ -281,8 +261,8 @@ func TestBackendRepository_Update(t *testing.T) {
 
 	// Create a backend
 	backend := &models.Backend{
-		ID:     "backend-1",
-		UserID: "user-1",
+		ID:     1,
+		UserID: 1,
 		Type:   models.BackendTypeExternalCalDAV,
 		Name:   "Original Name",
 		Config: &models.BackendConfig{
@@ -319,8 +299,8 @@ func TestBackendRepository_Update(t *testing.T) {
 
 	// Test updating non-existent backend
 	nonExistent := &models.Backend{
-		ID:     "non-existent",
-		UserID: "user-1",
+		ID:     999,
+		UserID: 1,
 		Type:   models.BackendTypeInternal,
 		Name:   "Non-existent",
 	}
@@ -338,8 +318,8 @@ func TestBackendRepository_Delete(t *testing.T) {
 
 	// Create a backend
 	backend := &models.Backend{
-		ID:     "backend-1",
-		UserID: "user-1",
+		ID:     1,
+		UserID: 1,
 		Type:   models.BackendTypeInternal,
 		Name:   "Test Backend",
 	}
@@ -363,7 +343,7 @@ func TestBackendRepository_Delete(t *testing.T) {
 	}
 
 	// Test deleting non-existent backend
-	err = repo.Delete("non-existent")
+	err = repo.Delete(999)
 	if err != ErrNotFound {
 		t.Errorf("Expected ErrNotFound, got %v", err)
 	}
@@ -377,8 +357,8 @@ func TestBackendRepository_EncryptionRoundTrip(t *testing.T) {
 
 	// Create backend with sensitive data
 	backend := &models.Backend{
-		ID:     "backend-1",
-		UserID: "user-1",
+		ID:     1,
+		UserID: 1,
 		Type:   models.BackendTypeExternalCalDAV,
 		Name:   "Secure Backend",
 		Config: &models.BackendConfig{

@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/chrisbelyea/momentum/internal/caldav"
 	"github.com/chrisbelyea/momentum/internal/db"
 	"github.com/chrisbelyea/momentum/internal/models"
-	"github.com/google/uuid"
 )
 
 // Handler handles backend configuration HTTP requests
@@ -45,8 +45,8 @@ func (h *Handler) HandleBackends(w http.ResponseWriter, r *http.Request) {
 // DELETE: Delete a backend
 func (h *Handler) HandleBackend(w http.ResponseWriter, r *http.Request) {
 	// Extract backend ID from path
-	backendID := strings.TrimPrefix(r.URL.Path, "/backends/")
-	if backendID == "" {
+	backendID, err := strconv.Atoi(strings.TrimPrefix(r.URL.Path, "/backends/"))
+	if err != nil || backendID <= 0 {
 		http.Error(w, "Backend ID is required", http.StatusBadRequest)
 		return
 	}
@@ -117,8 +117,8 @@ func (h *Handler) HandleValidateConnection(w http.ResponseWriter, r *http.Reques
 // listBackends lists all backends for a user
 func (h *Handler) listBackends(w http.ResponseWriter, r *http.Request) {
 	// Get user_id from query parameter
-	userID := r.URL.Query().Get("user_id")
-	if userID == "" {
+	userID, err := strconv.Atoi(r.URL.Query().Get("user_id"))
+	if err != nil || userID <= 0 {
 		http.Error(w, "user_id query parameter is required", http.StatusBadRequest)
 		return
 	}
@@ -139,7 +139,7 @@ func (h *Handler) listBackends(w http.ResponseWriter, r *http.Request) {
 }
 
 // getBackend gets a single backend by ID
-func (h *Handler) getBackend(w http.ResponseWriter, r *http.Request, backendID string) {
+func (h *Handler) getBackend(w http.ResponseWriter, r *http.Request, backendID int) {
 	backend, err := h.backendRepo.Get(backendID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get backend: %v", err), http.StatusInternalServerError)
@@ -166,11 +166,6 @@ func (h *Handler) createBackend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate ID if not provided
-	if backend.ID == "" {
-		backend.ID = uuid.New().String()
-	}
-
 	// Validate backend
 	if err := backend.Validate(); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid backend: %v", err), http.StatusBadRequest)
@@ -191,7 +186,7 @@ func (h *Handler) createBackend(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateBackend updates an existing backend
-func (h *Handler) updateBackend(w http.ResponseWriter, r *http.Request, backendID string) {
+func (h *Handler) updateBackend(w http.ResponseWriter, r *http.Request, backendID int) {
 	var backend models.Backend
 	if err := json.NewDecoder(r.Body).Decode(&backend); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
@@ -224,7 +219,7 @@ func (h *Handler) updateBackend(w http.ResponseWriter, r *http.Request, backendI
 }
 
 // deleteBackend deletes a backend
-func (h *Handler) deleteBackend(w http.ResponseWriter, r *http.Request, backendID string) {
+func (h *Handler) deleteBackend(w http.ResponseWriter, r *http.Request, backendID int) {
 	if err := h.backendRepo.Delete(backendID); err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			http.Error(w, "Backend not found", http.StatusNotFound)

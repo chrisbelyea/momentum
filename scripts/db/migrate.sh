@@ -1,14 +1,6 @@
 #!/usr/bin/env bash
+# Apply the canonical SQLite schema. Runtime upgrades are performed by the Go
+# binary's InitializeSchema compatibility migrator.
 set -euo pipefail
-
-LB_BIN=${LB_BIN:-liquibase}
-DEFAULTS_FILE=${DEFAULTS_FILE:-liquibase/liquibase.properties}
-
-if [[ ! -f "$DEFAULTS_FILE" ]]; then
-  echo "Defaults file not found: $DEFAULTS_FILE" >&2
-  exit 1
-fi
-
-cmd=${1:-update}
-
-$LB_BIN --defaultsFile="$DEFAULTS_FILE" "$@"
+DB_PATH="${DB_PATH:-momentum.db}"
+exec sqlite3 "${DB_PATH}" < "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/internal/db/schema/init.sql"

@@ -21,7 +21,7 @@ func NewBackendRepository(db *sql.DB) *BackendRepository {
 }
 
 // List returns all backends for a given user
-func (r *BackendRepository) List(userID string) ([]*models.Backend, error) {
+func (r *BackendRepository) List(userID int) ([]*models.Backend, error) {
 	query := `
 		SELECT id, user_id, backend_type, name, config_encrypted, created_at, updated_at
 		FROM backends
@@ -84,7 +84,7 @@ func (r *BackendRepository) List(userID string) ([]*models.Backend, error) {
 }
 
 // Get returns a single backend by ID
-func (r *BackendRepository) Get(id string) (*models.Backend, error) {
+func (r *BackendRepository) Get(id int) (*models.Backend, error) {
 	query := `
 		SELECT id, user_id, backend_type, name, config_encrypted, created_at, updated_at
 		FROM backends
@@ -158,13 +158,12 @@ func (r *BackendRepository) Create(backend *models.Backend) error {
 
 	query := `
 		INSERT INTO backends (
-			id, user_id, backend_type, name, config_encrypted, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?)
+			user_id, backend_type, name, config_encrypted, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?)
 	`
 
-	_, err := r.db.Exec(
+	result, err := r.db.Exec(
 		query,
-		backend.ID,
 		backend.UserID,
 		backend.Type,
 		backend.Name,
@@ -176,6 +175,11 @@ func (r *BackendRepository) Create(backend *models.Backend) error {
 	if err != nil {
 		return fmt.Errorf("failed to create backend: %w", err)
 	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("failed to get backend id: %w", err)
+	}
+	backend.ID = int(id)
 
 	return nil
 }
@@ -233,7 +237,7 @@ func (r *BackendRepository) Update(backend *models.Backend) error {
 }
 
 // Delete deletes a backend by ID
-func (r *BackendRepository) Delete(id string) error {
+func (r *BackendRepository) Delete(id int) error {
 	query := `DELETE FROM backends WHERE id = ?`
 
 	result, err := r.db.Exec(query, id)
