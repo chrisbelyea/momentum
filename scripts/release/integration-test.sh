@@ -20,6 +20,17 @@ BINARY="${1:?Usage: $(basename "$0") <path-to-momentum-server-binary>}"
 # Resolve to an absolute path so we can cd away from the original directory.
 BINARY_ABS="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 BINARY_DIR="$(cd "$(dirname "$1")" && pwd)"
+# GoReleaser may extract the binary into a named directory while placing the
+# packaged web assets beside it. Run from the discovered asset root so the
+# binary is tested in the same layout users receive.
+ASSET_DIR="${BINARY_DIR}"
+if [ ! -d "${ASSET_DIR}/web/templates" ] && [ -d "${BINARY_DIR}/../web/templates" ]; then
+  ASSET_DIR="$(cd "${BINARY_DIR}/.." && pwd)"
+fi
+if [ ! -d "${ASSET_DIR}/web/templates" ]; then
+  echo "Packaged web/templates not found near ${BINARY_ABS}" >&2
+  exit 1
+fi
 
 PORT="${PORT:-18443}"
 BASE_URL="https://localhost:${PORT}"
@@ -80,7 +91,7 @@ echo "==> Starting server..."
 # Run the server from its own directory so it can locate the bundled
 # web/templates at the expected relative path.
 (
-  cd "${BINARY_DIR}"
+  cd "${ASSET_DIR}"
   DB_PATH="${DB_PATH}" PORT="${PORT}" "${BINARY_ABS}" >> "${LOG_FILE}" 2>&1 &
   echo $!
 ) > "${TEMP_DIR}/server.pid"
@@ -225,6 +236,23 @@ if [ "${HTTP_CODE}" = "200" ]; then
   fi
 else
   fail "GET /caldav/tasks?backend_id=1 returned ${HTTP_CODE} (expected 200). Body: ${LIST_RESPONSE}"
+fi
+
+# --- Test: graceful shutdown ---
+echo "--- Graceful Shutdown ---"
+if [ -n "${SERVER_PID:-}" ]; then
+  kill "${SERVER_PID}" 2>/dev/null || true
+  SHUTDOWN_OK=0
+  for _ in $(seq 1 "${SERVER_SHUTDOWN_WAIT}"); do
+    sleep 1
+    if ! kill -0 "${SERVER_PID}" 2>/dev/null; then SHUTDOWN_OK=1; break; fi
+  done
+  if [ "${SHUTDOWN_OK}" = "1" ]; then
+    pass "Server exits cleanly after SIGTERM"
+    SERVER_PID=""
+  else
+    fail "Server did not exit gracefully after SIGTERM"
+  fi
 fi
 
 # ---------------------------------------------------------------------------
