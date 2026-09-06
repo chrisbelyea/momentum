@@ -18,8 +18,8 @@ func TestInitializeSchema_CreatesTablesOnEmptyDB(t *testing.T) {
 		t.Fatalf("InitializeSchema returned unexpected error: %v", err)
 	}
 
-	// Verify all three tables exist
-	tables := []string{"users", "backends", "tasks"}
+	// Verify all production tables exist, including authentication state.
+	tables := []string{"users", "backends", "tasks", "credentials", "sessions", "momentum_schema_migrations"}
 	for _, table := range tables {
 		var count int
 		err := database.QueryRow(

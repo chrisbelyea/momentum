@@ -68,6 +68,48 @@ func (r *TaskRepository) List(backendID int) ([]*models.Task, error) {
 	return tasks, nil
 }
 
+func (r *TaskRepository) ListForUser(backendID, userID int) ([]*models.Task, error) {
+	if !r.backendOwned(backendID, userID) {
+		return []*models.Task{}, nil
+	}
+	return r.List(backendID)
+}
+func (r *TaskRepository) GetForUser(id, userID int) (*models.Task, error) {
+	t, err := r.Get(id)
+	if err != nil || t == nil {
+		return t, err
+	}
+	if !r.backendOwned(t.BackendID, userID) {
+		return nil, nil
+	}
+	return t, nil
+}
+func (r *TaskRepository) UpdateForUser(task *models.Task, userID int) error {
+	if !r.backendOwned(task.BackendID, userID) {
+		return ErrNotFound
+	}
+	return r.Update(task)
+}
+func (r *TaskRepository) DeleteForUser(id, userID int) error {
+	t, err := r.Get(id)
+	if err != nil || t == nil || !r.backendOwned(t.BackendID, userID) {
+		return ErrNotFound
+	}
+	return r.Delete(id)
+}
+func (r *TaskRepository) backendOwned(backendID, userID int) bool {
+	var n int
+	return r.db.QueryRow("SELECT COUNT(1) FROM backends WHERE id=? AND user_id=?", backendID, userID).Scan(&n) == nil && n == 1
+}
+func (r *TaskRepository) BackendOwned(backendID, userID int) bool {
+	return r.backendOwned(backendID, userID)
+}
+func (r *TaskRepository) DefaultBackendForUser(userID int) (int, error) {
+	var id int
+	err := r.db.QueryRow("SELECT id FROM backends WHERE user_id=? ORDER BY id LIMIT 1", userID).Scan(&id)
+	return id, err
+}
+
 // Get returns a single task by ID
 func (r *TaskRepository) Get(id int) (*models.Task, error) {
 	query := `

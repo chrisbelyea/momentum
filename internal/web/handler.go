@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/chrisbelyea/momentum/internal/auth"
 	"github.com/chrisbelyea/momentum/internal/db"
 	"github.com/chrisbelyea/momentum/internal/models"
 	webassets "github.com/chrisbelyea/momentum/web"
@@ -34,11 +35,17 @@ func (h *Handler) HandleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// For now, use backend_id=1 as default
-	// In a real application, this would come from authentication
-	backendID := 1
+	userID, ok := auth.UserIDFromRequest(r)
+	if !ok {
+		userID = 1
+	}
+	backendID, err := h.taskRepo.DefaultBackendForUser(userID)
+	if err != nil {
+		http.Error(w, "no task backend configured", 500)
+		return
+	}
 
-	tasks, err := h.taskRepo.List(backendID)
+	tasks, err := h.taskRepo.ListForUser(backendID, userID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to load tasks: %v", err), http.StatusInternalServerError)
 		return
@@ -82,10 +89,17 @@ func (h *Handler) HandleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// For now, use backend_id=1 as default
-	backendID := 1
+	userID, ok := auth.UserIDFromRequest(r)
+	if !ok {
+		userID = 1
+	}
+	backendID, err := h.taskRepo.DefaultBackendForUser(userID)
+	if err != nil {
+		http.Error(w, "no task backend configured", 500)
+		return
+	}
 
-	tasks, err := h.taskRepo.List(backendID)
+	tasks, err := h.taskRepo.ListForUser(backendID, userID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to load tasks: %v", err), http.StatusInternalServerError)
 		return
@@ -151,7 +165,11 @@ func (h *Handler) HandleUpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the existing task
-	task, err := h.taskRepo.Get(taskID)
+	userID, ok := auth.UserIDFromRequest(r)
+	if !ok {
+		userID = 1
+	}
+	task, err := h.taskRepo.GetForUser(taskID, userID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get task: %v", err), http.StatusInternalServerError)
 		return
@@ -164,7 +182,7 @@ func (h *Handler) HandleUpdateStatus(w http.ResponseWriter, r *http.Request) {
 	// Update the status
 	task.Status = req.Status
 
-	if err := h.taskRepo.Update(task); err != nil {
+	if err := h.taskRepo.UpdateForUser(task, userID); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to update task: %v", err), http.StatusInternalServerError)
 		return
 	}

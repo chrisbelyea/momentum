@@ -1,7 +1,7 @@
 # Database schema
 
-`internal/db/schema/changelog/001-initial.sql` is Momentum's canonical SQLite
-schema changelog. It defines the schema used by repositories and the release
+`internal/db/schema/changelog/*.sql` is Momentum's canonical SQLite schema
+changelog, applied in filename order. It defines the schema used by repositories and the release
 binary. `internal/db/schema/init.sql` is a generated, embedded artifact only;
 regenerate it with `scripts/db/generate-init-sql.sh` and validate it with
 `scripts/db/generate-init-sql.sh --check`.

@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/chrisbelyea/momentum/internal/auth"
 	"github.com/chrisbelyea/momentum/internal/backend"
 	"github.com/chrisbelyea/momentum/internal/caldav"
 	"github.com/chrisbelyea/momentum/internal/config"
@@ -91,6 +92,7 @@ func main() {
 	// Initialize repositories
 	taskRepo := db.NewTaskRepository(database)
 	backendRepo := db.NewBackendRepository(database)
+	authService := auth.NewService(database)
 
 	// Initialize handlers
 	caldavHandler := caldav.NewHandler(taskRepo)
@@ -101,6 +103,7 @@ func main() {
 
 	// Setup routes
 	mux := http.NewServeMux()
+	mux.Handle("/auth/", authService.Routes())
 
 	// Static file serving (PWA assets: manifest.json, icons, service worker).
 	// Directory listings are disabled; individual files are cached for one year.
@@ -120,18 +123,18 @@ func main() {
 	})))
 
 	// Web UI routes
-	mux.HandleFunc("/", webHandler.HandleIndex)
-	mux.HandleFunc("/list", webHandler.HandleList)
-	mux.HandleFunc("/api/tasks/", webHandler.HandleUpdateStatus)
+	mux.Handle("/", authService.Require(http.HandlerFunc(webHandler.HandleIndex)))
+	mux.Handle("/list", authService.Require(http.HandlerFunc(webHandler.HandleList)))
+	mux.Handle("/api/tasks/", authService.Require(http.HandlerFunc(webHandler.HandleUpdateStatus)))
 
 	// CalDAV routes
-	mux.HandleFunc("/caldav/tasks", caldavHandler.HandleTasks)
-	mux.HandleFunc("/caldav/tasks/", caldavHandler.HandleTask)
+	mux.Handle("/caldav/tasks", authService.Require(http.HandlerFunc(caldavHandler.HandleTasks)))
+	mux.Handle("/caldav/tasks/", authService.Require(http.HandlerFunc(caldavHandler.HandleTask)))
 
 	// Backend configuration routes
-	mux.HandleFunc("/backends", backendHandler.HandleBackends)
-	mux.HandleFunc("/backends/", backendHandler.HandleBackend)
-	mux.HandleFunc("/backends/validate", backendHandler.HandleValidateConnection)
+	mux.Handle("/backends", authService.Require(http.HandlerFunc(backendHandler.HandleBackends)))
+	mux.Handle("/backends/", authService.Require(http.HandlerFunc(backendHandler.HandleBackend)))
+	mux.Handle("/backends/validate", authService.Require(http.HandlerFunc(backendHandler.HandleValidateConnection)))
 
 	// Health check endpoint
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/chrisbelyea/momentum/internal/auth"
 	"github.com/chrisbelyea/momentum/internal/caldav"
 	"github.com/chrisbelyea/momentum/internal/db"
 	"github.com/chrisbelyea/momentum/internal/models"
@@ -116,13 +117,14 @@ func (h *Handler) HandleValidateConnection(w http.ResponseWriter, r *http.Reques
 
 // listBackends lists all backends for a user
 func (h *Handler) listBackends(w http.ResponseWriter, r *http.Request) {
-	// Get user_id from query parameter
-	userID, err := strconv.Atoi(r.URL.Query().Get("user_id"))
-	if err != nil || userID <= 0 {
-		http.Error(w, "user_id query parameter is required", http.StatusBadRequest)
-		return
+	userID, ok := auth.UserIDFromRequest(r)
+	if !ok {
+		userID, _ = strconv.Atoi(r.URL.Query().Get("user_id"))
+		if userID <= 0 {
+			userID = 1
+		}
 	}
-
+	var err error
 	backends, err := h.backendRepo.List(userID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to list backends: %v", err), http.StatusInternalServerError)
@@ -150,6 +152,10 @@ func (h *Handler) getBackend(w http.ResponseWriter, r *http.Request, backendID i
 		http.Error(w, "Backend not found", http.StatusNotFound)
 		return
 	}
+	if uid, ok := auth.UserIDFromRequest(r); ok && backend.UserID != uid {
+		http.Error(w, "Backend not found", http.StatusNotFound)
+		return
+	}
 
 	// Sanitize sensitive data
 	backend.SanitizeForResponse()
@@ -164,6 +170,9 @@ func (h *Handler) createBackend(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&backend); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 		return
+	}
+	if userID, ok := auth.UserIDFromRequest(r); ok {
+		backend.UserID = userID
 	}
 
 	// Validate backend
@@ -195,6 +204,9 @@ func (h *Handler) updateBackend(w http.ResponseWriter, r *http.Request, backendI
 
 	// Ensure ID matches the URL
 	backend.ID = backendID
+	if uid, ok := auth.UserIDFromRequest(r); ok {
+		backend.UserID = uid
+	}
 
 	// Validate backend
 	if err := backend.Validate(); err != nil {
@@ -220,6 +232,12 @@ func (h *Handler) updateBackend(w http.ResponseWriter, r *http.Request, backendI
 
 // deleteBackend deletes a backend
 func (h *Handler) deleteBackend(w http.ResponseWriter, r *http.Request, backendID int) {
+	uid, hasUser := auth.UserIDFromRequest(r)
+	owned, err := h.backendRepo.Get(backendID)
+	if hasUser && (err != nil || owned == nil || owned.UserID != uid) {
+		http.Error(w, "Backend not found", 404)
+		return
+	}
 	if err := h.backendRepo.Delete(backendID); err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			http.Error(w, "Backend not found", http.StatusNotFound)
