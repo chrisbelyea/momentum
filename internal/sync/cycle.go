@@ -52,8 +52,18 @@ func RunCycle(ctx context.Context, adapter Adapter, runner Runner, input CycleIn
 	if runner.Policy.MaxAttempts == 0 {
 		runner.Policy = DefaultRetryPolicy
 	}
-	pull, err := adapter.Pull(ctx, input.Cursor)
-	if err != nil {
+	// Pulls participate in the same per-backend limiter and observability as
+	// mutations, but are never marked completed in the idempotency store: a
+	// successful read must run again when the scheduler retries that cursor.
+	pullRunner := runner
+	pullRunner.Store = nil
+	var pull PullResult
+	pullKey := fmt.Sprintf("backend/%d/pull/%s", input.BackendID, input.Cursor)
+	if err := pullRunner.Run(ctx, SyncOperation{BackendID: input.BackendID, Operation: "pull", Key: pullKey, Run: func(ctx context.Context) error {
+		var err error
+		pull, err = adapter.Pull(ctx, input.Cursor)
+		return err
+	}}); err != nil {
 		return CycleResult{}, fmt.Errorf("pull backend %d: %w", input.BackendID, err)
 	}
 	planned, err := Plan(ReconcileInput{BackendID: input.BackendID, Local: input.Local, Mappings: input.Mappings, Pull: pull})
@@ -73,7 +83,7 @@ func RunCycle(ctx context.Context, adapter Adapter, runner Runner, input CycleIn
 			}
 			entity := remoteEntityForAction(action, input.BackendID)
 			var push PushResult
-			operation := SyncOperation{Key: operationKey(input.BackendID, "push", entity.RemoteUID, index), Run: func(ctx context.Context) error {
+			operation := SyncOperation{BackendID: input.BackendID, Operation: "push", Key: operationKey(input.BackendID, "push", entity.RemoteUID, index), Run: func(ctx context.Context) error {
 				var err error
 				push, err = adapter.Push(ctx, entity)
 				return err
@@ -88,7 +98,7 @@ func RunCycle(ctx context.Context, adapter Adapter, runner Runner, input CycleIn
 				return CycleResult{}, fmt.Errorf("sync adapter does not support remote delete for action %d", index)
 			}
 			entity := remoteEntityForAction(action, input.BackendID)
-			if err := runner.Run(ctx, SyncOperation{Key: operationKey(input.BackendID, "delete", entity.RemoteUID, index), Run: func(ctx context.Context) error {
+			if err := runner.Run(ctx, SyncOperation{BackendID: input.BackendID, Operation: "delete", Key: operationKey(input.BackendID, "delete", entity.RemoteUID, index), Run: func(ctx context.Context) error {
 				return adapter.Delete(ctx, entity)
 			}}); err != nil {
 				return CycleResult{}, err
