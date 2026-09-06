@@ -168,15 +168,8 @@ func TestClient_ValidateConnectionInvalidURL(t *testing.T) {
 		Password: "pass",
 	}
 
-	client, err := NewClient(config)
-	if err != nil {
-		t.Fatalf("Failed to create client: %v", err)
-	}
-	defer client.Close()
-
-	err = client.ValidateConnection()
-	if err == nil {
-		t.Error("Expected error for invalid URL")
+	if _, err := NewClient(config); err == nil {
+		t.Error("Expected invalid HTTP URL to be rejected before dialing")
 	}
 }
 
@@ -214,8 +207,12 @@ func TestClient_TLSConfiguration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			url := "https://caldav.example.com"
+			if tt.skipTLSVerify {
+				url = "https://localhost/tasks"
+			}
 			config := &models.BackendConfig{
-				URL:           "https://caldav.example.com",
+				URL:           url,
 				Username:      "user",
 				Password:      "pass",
 				SkipTLSVerify: tt.skipTLSVerify,
@@ -231,5 +228,32 @@ func TestClient_TLSConfiguration(t *testing.T) {
 				t.Error("Expected HTTP transport to be configured")
 			}
 		})
+	}
+}
+
+func TestValidateTargetURLRejectsSSRFAndDowngrade(t *testing.T) {
+	tests := []string{
+		"http://caldav.example.com/tasks",
+		"https://127.0.0.1/tasks",
+		"https://[::1]/tasks",
+		"https://10.0.0.5/tasks",
+		"https://169.254.169.254/latest/meta-data",
+		"https://caldav.example.com:8443/tasks",
+		"https://user:password@caldav.example.com/tasks",
+	}
+	for _, raw := range tests {
+		t.Run(raw, func(t *testing.T) {
+			if _, err := validateTargetURL(raw, false); err == nil {
+				t.Fatalf("validateTargetURL(%q) accepted an unsafe destination", raw)
+			}
+		})
+	}
+}
+
+func TestValidateTargetURLAcceptsHTTPS443(t *testing.T) {
+	for _, raw := range []string{"https://caldav.example.com/tasks", "https://caldav.example.com:443/tasks"} {
+		if _, err := validateTargetURL(raw, false); err != nil {
+			t.Errorf("validateTargetURL(%q) rejected a valid destination: %v", raw, err)
+		}
 	}
 }

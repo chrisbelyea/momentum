@@ -82,7 +82,7 @@ echo "==> Starting server..."
 # the binary and must not depend on the process' working directory.
 (
   cd "${TEMP_DIR}"
-  DB_PATH="${DB_PATH}" PORT="${PORT}" "${BINARY_ABS}" >> "${LOG_FILE}" 2>&1 &
+  DB_PATH="${DB_PATH}" PORT="${PORT}" MOMENTUM_DEV_MODE=1 "${BINARY_ABS}" >> "${LOG_FILE}" 2>&1 &
   echo $!
 ) > "${TEMP_DIR}/server.pid"
 SERVER_PID="$(cat "${TEMP_DIR}/server.pid")"
