@@ -2,13 +2,13 @@
 
 This document provides an up-to-date assessment of Momentum's implementation progress and outlines the prioritized next steps.
 
-> Last updated: 2026-03-04
+> Last updated: 2026-09-06
 
 ---
 
 ## Summary
 
-Momentum has a solid foundation in place: repository infrastructure, database schema, CI pipeline, and a bare-bones Go HTTP server. The project is at the **end of its bootstrapping phase** and is ready to begin feature implementation. No user-facing functionality exists yet — there is no web UI, no authentication, and no TLS enforcement.
+Momentum now has a runnable authenticated server for Windows and Linux. Main includes canonical schema upgrades, secure sessions and ownership checks, embedded web assets, TLS-only serving, CalDAV VTODO JSON/iCalendar task resources, release-binary workflow tests, and native launch/service packaging. Phase 1 is not complete: collection discovery, external-provider CRUD, synchronization, full web editing/accessibility, and browser-level tests remain open in GitHub Issues #65–#68.
 
 ---
 
@@ -36,13 +36,14 @@ All core tables are defined and pass `liquibase validate` on SQLite and PostgreS
 
 Performance indexes on `(backend_id, status)`, `due_at`, credential/session lookups are also in place.
 
-### Go Server Scaffold
-A minimal HTTP server (`cmd/server/main.go`) is running with:
+### Go Server and release workflow
+A Go HTTP server (`cmd/server/main.go`) is running with:
 - SQLite backend via `database/sql` + `go-sqlite3`.
 - `internal/models`: `Task` struct and `TaskRow` with nullable-field parsing.
 - `internal/db`: `TaskRepository` with full CRUD (List, Get, Create, Update, Delete).
 - `internal/caldav`: HTTP handlers for `GET/POST /caldav/tasks` and `GET/PUT/DELETE /caldav/tasks/{id}`.
-- `/health` endpoint.
+- `/health` endpoint and authenticated registration/login/logout.
+- Release integration validation that exercises registration, task CRUD, persistence, deletion, and graceful shutdown (12 checks).
 - Unit tests covering all CRUD operations with an in-memory SQLite database.
 
 ### Documentation
@@ -61,31 +62,26 @@ The following are **not yet implemented** in code:
 
 | Area | Gap |
 |---|---|
-| **Authentication** | Auth tables exist; no login, session, or middleware code. |
-| **TLS** | Server runs plain HTTP. TLS 1.3+ is required by spec; HTTP must be rejected. |
-| **Web UI** | No HTML, CSS, or JavaScript exists. No kanban board, no list view. |
+| **Authentication** | Core registration/login/logout and session ownership are implemented; full browser task-management UX remains in #65. |
+| **TLS** | TLS 1.3+ is enforced; development certificates are explicit and production encryption keys are required. |
+| **Web UI** | Board/list views exist; accessible create/edit/delete/backend selection and browser E2E coverage remain in #65. |
 | **Sync** | No sync orchestration code. Design exists in `docs/design-overview.md`. |
-| **External CalDAV** | No connection management or external CalDAV client code. |
+| **External CalDAV** | Outbound target validation is hardened; collection discovery and provider CRUD remain in #67. |
 | **VTODO wire format** | API is JSON-only. No iCalendar serialization/deserialization (`pkg/vtodo` is a placeholder). |
 | **Credential storage** | No OS keychain integration for clients. |
-| **Release packaging** | No single-executable build scripts for Linux/Windows service packaging or PWA build pipeline. |
+| **Release packaging** | Native Linux/Windows launch and service helpers are included in archives; published release and runtime verification remain gated on Phase 1. |
 
 ---
 
-## Open Issues (All P1)
+## Current tracked work (GitHub is authoritative)
 
-| # | Title | Area |
-|---|---|---|
-| [#8](https://github.com/chrisbelyea/momentum/issues/8) | External CalDAV connection configuration | sync, security |
-| [#9](https://github.com/chrisbelyea/momentum/issues/9) | Web kanban scaffold (drag-and-drop) | web |
-| [#10](https://github.com/chrisbelyea/momentum/issues/10) | List view with filter/sort | web |
-| [#11](https://github.com/chrisbelyea/momentum/issues/11) | TLS-only defaults & setup docs | security |
-| [#12](https://github.com/chrisbelyea/momentum/issues/12) | Credential storage policy (OS keychains) | security, docs |
-| [#15](https://github.com/chrisbelyea/momentum/issues/15) | Release packaging plan | ci, docs |
+See the [Phase 1 recovery program](https://github.com/chrisbelyea/momentum/issues/61) and its dependency chain: #65 (web workflow), #66 (VTODO completion), #67 (CalDAV interoperability), and #68 (synchronization). Supporting P2 work is tracked in #70, #71. Completed platform work is recorded in #74–#78.
 
 ---
 
-## Recommended Next Steps
+## Historical bootstrap notes
+
+The following bootstrap recommendations are retained for context; their original gaps are superseded by the current tracked issues above.
 
 The following order is recommended to unblock end-to-end user flows as quickly as possible.
 
