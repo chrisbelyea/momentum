@@ -80,3 +80,33 @@ jobs:
               & sc.exe delete $serviceName | Out-Null
             }
           }
+
+  macos-native-release:
+    name: Native macOS release workflow (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-15-intel, arch: amd64, machine: x86_64 }
+          - { runner: macos-14, arch: arm64, machine: arm64 }
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Assert native runner architecture
+        run: test "$(uname -m)" = "${{ matrix.machine }}"
+      - name: Build native release binary
+        env:
+          GOOS: darwin
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: '1'
+          VERSION: ci-${{ github.sha }}
+        run: ./scripts/release/build-server.sh
+      - name: Run complete fresh-database workflow
+        run: |
+          chmod +x scripts/release/integration-test.sh
+          scripts/release/integration-test.sh "$(pwd)/dist/server/momentum-server"
