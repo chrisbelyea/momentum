@@ -11,6 +11,19 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+func TestRequireRejectsCrossSiteMutation(t *testing.T) {
+	db := testDB(t)
+	s := NewService(db)
+	r := httptest.NewRequest(http.MethodPost, "/protected", nil)
+	r.Host = "localhost:8443"
+	r.Header.Set("Origin", "https://evil.example")
+	rr := httptest.NewRecorder()
+	s.Require(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { t.Fatal("handler called") })).ServeHTTP(rr, r)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", rr.Code)
+	}
+}
+
 func testDB(t *testing.T) *sql.DB {
 	d, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {

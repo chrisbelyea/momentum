@@ -49,6 +49,9 @@ func (s *Service) CreateUser(email, password string) (int, error) {
 	if _, err = s.db.Exec("INSERT INTO credentials(user_id,type,secret_hash) VALUES(?,?,?)", id, credentialType, hash); err != nil {
 		return 0, fmt.Errorf("create credential: %w", err)
 	}
+	if _, err = s.db.Exec("INSERT INTO backends(user_id,backend_type,name) VALUES(?,?,?)", id, "internal", "Local tasks"); err != nil {
+		return 0, fmt.Errorf("create default backend: %w", err)
+	}
 	return int(id), nil
 }
 

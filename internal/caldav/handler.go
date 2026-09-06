@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/chrisbelyea/momentum/internal/auth"
 	"github.com/chrisbelyea/momentum/internal/db"
 	"github.com/chrisbelyea/momentum/internal/models"
 )
@@ -82,8 +83,12 @@ func (h *Handler) listTasks(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid backend_id", http.StatusBadRequest)
 		return
 	}
+	userID, ok := auth.UserIDFromRequest(r)
+	if !ok {
+		userID = 1
+	}
 
-	tasks, err := h.taskRepo.List(backendID)
+	tasks, err := h.taskRepo.ListForUser(backendID, userID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to list tasks: %v", err), http.StatusInternalServerError)
 		return
@@ -95,7 +100,11 @@ func (h *Handler) listTasks(w http.ResponseWriter, r *http.Request) {
 
 // getTask gets a single task by ID
 func (h *Handler) getTask(w http.ResponseWriter, r *http.Request, taskID int) {
-	task, err := h.taskRepo.Get(taskID)
+	userID, ok := auth.UserIDFromRequest(r)
+	if !ok {
+		userID = 1
+	}
+	task, err := h.taskRepo.GetForUser(taskID, userID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get task: %v", err), http.StatusInternalServerError)
 		return
@@ -112,6 +121,10 @@ func (h *Handler) getTask(w http.ResponseWriter, r *http.Request, taskID int) {
 
 // createTask creates a new task
 func (h *Handler) createTask(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.UserIDFromRequest(r)
+	if !ok {
+		userID = 1
+	}
 	var task models.Task
 	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
@@ -130,6 +143,10 @@ func (h *Handler) createTask(w http.ResponseWriter, r *http.Request) {
 	if task.Status == "" {
 		task.Status = models.StatusNeedsAction
 	}
+	if !h.taskRepo.BackendOwned(task.BackendID, userID) {
+		http.Error(w, "backend not found", 404)
+		return
+	}
 
 	if err := h.taskRepo.Create(&task); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create task: %v", err), http.StatusInternalServerError)
@@ -143,6 +160,10 @@ func (h *Handler) createTask(w http.ResponseWriter, r *http.Request) {
 
 // updateTask updates an existing task
 func (h *Handler) updateTask(w http.ResponseWriter, r *http.Request, taskID int) {
+	userID, ok := auth.UserIDFromRequest(r)
+	if !ok {
+		userID = 1
+	}
 	var task models.Task
 	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
@@ -166,7 +187,7 @@ func (h *Handler) updateTask(w http.ResponseWriter, r *http.Request, taskID int)
 		return
 	}
 
-	if err := h.taskRepo.Update(&task); err != nil {
+	if err := h.taskRepo.UpdateForUser(&task, userID); err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			http.Error(w, "Task not found", http.StatusNotFound)
 			return
@@ -181,7 +202,11 @@ func (h *Handler) updateTask(w http.ResponseWriter, r *http.Request, taskID int)
 
 // deleteTask deletes a task
 func (h *Handler) deleteTask(w http.ResponseWriter, r *http.Request, taskID int) {
-	if err := h.taskRepo.Delete(taskID); err != nil {
+	userID, ok := auth.UserIDFromRequest(r)
+	if !ok {
+		userID = 1
+	}
+	if err := h.taskRepo.DeleteForUser(taskID, userID); err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			http.Error(w, "Task not found", http.StatusNotFound)
 			return
