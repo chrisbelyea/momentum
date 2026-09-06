@@ -29,6 +29,7 @@ SERVER_SHUTDOWN_WAIT=5    # seconds to wait for graceful shutdown before SIGKILL
 TEMP_DIR="$(mktemp -d)"
 DB_PATH="${TEMP_DIR}/integration-test.db"
 LOG_FILE="${TEMP_DIR}/server.log"
+COOKIE_JAR="${TEMP_DIR}/cookies.txt"
 
 SERVER_PID=""
 TESTS_PASSED=0
@@ -119,6 +120,14 @@ echo ""
 echo "==> Running integration tests..."
 echo ""
 
+echo "--- Authentication ---"
+AUTH_EMAIL="integration-${RANDOM}@example.invalid"
+AUTH_BODY="$(curl -k -s -c "${COOKIE_JAR}" -X POST "${BASE_URL}/auth/register" -H "Content-Type: application/json" -d "{\"email\":\"${AUTH_EMAIL}\",\"password\":\"integration-password-123\"}")"
+if echo "${AUTH_BODY}" | grep -q 'user_id'; then pass "POST /auth/register creates an authenticated session"; else fail "Registration failed: ${AUTH_BODY}"; fi
+BACKENDS_BODY="$(curl -k -s -b "${COOKIE_JAR}" "${BASE_URL}/backends")"
+BACKEND_ID="$(printf '%s' "${BACKENDS_BODY}" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')"
+if [ -n "${BACKEND_ID}" ]; then pass "Authenticated user has a default backend"; else fail "No default backend: ${BACKENDS_BODY}"; fi
+
 # --- Test: Health endpoint ---
 echo "--- Health Endpoint ---"
 HTTP_CODE=$(curl -k -s -o /dev/null -w "%{http_code}" "${BASE_URL}/health" 2>/dev/null || echo "000")
@@ -131,7 +140,7 @@ fi
 # --- Test: Web UI homepage loads without errors ---
 echo "--- Web UI Homepage ---"
 HOMEPAGE_BODY="$(mktemp)"
-HTTP_CODE=$(curl -k -s -o "${HOMEPAGE_BODY}" -w "%{http_code}" "${BASE_URL}/" 2>/dev/null || echo "000")
+HTTP_CODE=$(curl -k -s -b "${COOKIE_JAR}" -o "${HOMEPAGE_BODY}" -w "%{http_code}" "${BASE_URL}/" 2>/dev/null || echo "000")
 if [ "${HTTP_CODE}" = "200" ]; then
   pass "GET / returns 200 OK"
 else
@@ -151,9 +160,9 @@ fi
 echo "--- Create Task ---"
 CREATE_BODY="$(mktemp)"
 HTTP_CODE=$(curl -k -s -o "${CREATE_BODY}" -w "%{http_code}" \
-  -X POST "${BASE_URL}/caldav/tasks" \
+  -X POST "${BASE_URL}/caldav/tasks" -b "${COOKIE_JAR}" \
   -H "Content-Type: application/json" \
-  -d '{"backend_id": 1, "title": "Integration Test Task", "status": "NEEDS-ACTION"}' \
+  -d '{"backend_id":'"${BACKEND_ID}"', "title": "Integration Test Task", "status": "NEEDS-ACTION"}' \
   2>/dev/null || echo "000")
 CREATE_RESPONSE="$(cat "${CREATE_BODY}")"
 rm -f "${CREATE_BODY}"
@@ -172,9 +181,9 @@ echo "--- Update Task ---"
 if [ -n "${TASK_ID:-}" ]; then
   UPDATE_BODY="$(mktemp)"
   HTTP_CODE=$(curl -k -s -o "${UPDATE_BODY}" -w "%{http_code}" \
-    -X PUT "${BASE_URL}/caldav/tasks/${TASK_ID}" \
+    -X PUT "${BASE_URL}/caldav/tasks/${TASK_ID}" -b "${COOKIE_JAR}" \
     -H "Content-Type: application/json" \
-    -d '{"backend_id": 1, "title": "Updated Integration Task", "status": "IN-PROCESS"}' \
+    -d '{"backend_id":'"${BACKEND_ID}"', "title": "Updated Integration Task", "status": "IN-PROCESS"}' \
     2>/dev/null || echo "000")
   UPDATE_RESPONSE="$(cat "${UPDATE_BODY}")"
   rm -f "${UPDATE_BODY}"
@@ -186,7 +195,7 @@ if [ -n "${TASK_ID:-}" ]; then
 
   PERSIST_BODY="$(mktemp)"
   HTTP_CODE=$(curl -k -s -o "${PERSIST_BODY}" -w "%{http_code}" \
-    "${BASE_URL}/caldav/tasks/${TASK_ID}" 2>/dev/null || echo "000")
+    -b "${COOKIE_JAR}" "${BASE_URL}/caldav/tasks/${TASK_ID}" 2>/dev/null || echo "000")
   PERSIST_RESPONSE="$(cat "${PERSIST_BODY}")"
   rm -f "${PERSIST_BODY}"
   if [ "${HTTP_CODE}" = "200" ] && echo "${PERSIST_RESPONSE}" | grep -q 'Updated Integration Task'; then
@@ -200,7 +209,7 @@ fi
 echo "--- Delete Task ---"
 if [ -n "${TASK_ID:-}" ]; then
   HTTP_CODE=$(curl -k -s -o /dev/null -w "%{http_code}" -X DELETE \
-    "${BASE_URL}/caldav/tasks/${TASK_ID}" 2>/dev/null || echo "000")
+    -b "${COOKIE_JAR}" "${BASE_URL}/caldav/tasks/${TASK_ID}" 2>/dev/null || echo "000")
   if [ "${HTTP_CODE}" = "204" ]; then
     pass "DELETE /caldav/tasks/${TASK_ID} returns 204 No Content"
   else
@@ -212,19 +221,19 @@ fi
 echo "--- List Tasks ---"
 LIST_BODY="$(mktemp)"
 HTTP_CODE=$(curl -k -s -o "${LIST_BODY}" -w "%{http_code}" \
-  "${BASE_URL}/caldav/tasks?backend_id=1" \
+  -b "${COOKIE_JAR}" "${BASE_URL}/caldav/tasks?backend_id=${BACKEND_ID}" \
   2>/dev/null || echo "000")
 LIST_RESPONSE="$(cat "${LIST_BODY}")"
 rm -f "${LIST_BODY}"
 if [ "${HTTP_CODE}" = "200" ]; then
-  pass "GET /caldav/tasks?backend_id=1 returns 200 OK"
+  pass "GET /caldav/tasks returns 200 OK for authenticated user"
   if ! echo "${LIST_RESPONSE}" | grep -q "Updated Integration Task"; then
     pass "Deleted task is absent from task list"
   else
     fail "Deleted task remains in task list. Body: ${LIST_RESPONSE}"
   fi
 else
-  fail "GET /caldav/tasks?backend_id=1 returned ${HTTP_CODE} (expected 200). Body: ${LIST_RESPONSE}"
+  fail "GET /caldav/tasks returned ${HTTP_CODE} (expected 200). Body: ${LIST_RESPONSE}"
 fi
 
 # --- Test: graceful shutdown ---
