@@ -8,7 +8,7 @@ This document provides an up-to-date assessment of Momentum's implementation pro
 
 ## Summary
 
-Momentum now has a runnable authenticated server for Windows and Linux. Main includes canonical schema upgrades, secure sessions and ownership checks, embedded web assets, TLS-only serving, CalDAV VTODO JSON/iCalendar task resources, release-binary workflow tests, and native launch/service packaging. Phase 1 is not complete: collection discovery, external-provider CRUD, synchronization, full web editing/accessibility, and browser-level tests remain open in GitHub Issues #65–#68.
+Momentum now has a runnable authenticated server for Windows and Linux. Main includes canonical schema upgrades, secure sessions and ownership checks, embedded web assets, TLS-only serving, CalDAV VTODO JSON/iCalendar task resources, external collection discovery and CRUD, executable sync planning/cycles, release-binary workflow tests, and native launch/service packaging. Phase 1 is not complete: provider interoperability certification, full local sync application/conflict UX, richer web editing, and browser-level tests remain open in GitHub Issues #65–#68.
 
 ---
 
@@ -43,7 +43,7 @@ A Go HTTP server (`cmd/server/main.go`) is running with:
 - `internal/db`: `TaskRepository` with full CRUD (List, Get, Create, Update, Delete).
 - `internal/caldav`: HTTP handlers for `GET/POST /caldav/tasks` and `GET/PUT/DELETE /caldav/tasks/{id}`.
 - `/health` endpoint and authenticated registration/login/logout.
-- Release integration validation that exercises registration, task CRUD, persistence, deletion, and graceful shutdown (12 checks).
+- Release integration validation exercises registration, authenticated task CRUD/persistence/deletion, PWA assets, and graceful shutdown (16 checks); Windows SCM lifecycle runs on `windows-latest` in CI.
 - Unit tests covering all CRUD operations with an in-memory SQLite database.
 
 ### Documentation
@@ -65,9 +65,9 @@ The following are **not yet implemented** in code:
 | **Authentication** | Core registration/login/logout and session ownership are implemented; full browser task-management UX remains in #65. |
 | **TLS** | TLS 1.3+ is enforced; development certificates are explicit and production encryption keys are required. |
 | **Web UI** | Board/list views exist; accessible create/edit/delete/backend selection and browser E2E coverage remain in #65. |
-| **Sync** | No sync orchestration code. Design exists in `docs/design-overview.md`. |
-| **External CalDAV** | Outbound target validation is hardened; collection discovery and provider CRUD remain in #67. |
-| **VTODO wire format** | API is JSON-only. No iCalendar serialization/deserialization (`pkg/vtodo` is a placeholder). |
+| **Sync** | Provider-neutral reconciliation cycles, retry/idempotency, and a CalDAV adapter are implemented; transactional local application and conflict/recovery UX remain in #68. |
+| **External CalDAV** | Authenticated collection discovery, VTODO CRUD, REPORT lifecycle, and a sync adapter are implemented; real-provider interoperability matrix remains in #67. |
+| **VTODO wire format** | RFC 5545 parser/serializer, canonical persistence, date-only fidelity, provider extension preservation, and fixture coverage are implemented. The JSON/iCalendar boundary is documented in `docs/vtodo-api.md`. |
 | **Credential storage** | No OS keychain integration for clients. |
 | **Release packaging** | Native Linux/Windows launch and service helpers are included in archives; published release and runtime verification remain gated on Phase 1. |
 
@@ -120,7 +120,7 @@ Required before any public or self-hosted release.
 
 ## Architecture Gaps to Resolve Before Feature Completion
 
-1. **`pkg/vtodo` package** — VTODO serialization/deserialization is referenced in server README as a future placeholder. Needed before external CalDAV sync and proper RFC 4791 compliance.
+1. **Provider certification and sync operations** — `pkg/vtodo` and the CalDAV adapter are implemented; remaining work is the real-provider interoperability matrix, transactional local action application, and conflict/recovery UX tracked in #67 and #68.
 2. **Backend abstraction layer** — The `backends` table exists, but there is no Go interface defining the backend contract (List, Get, Create, Update, Delete, Sync). This interface should be defined before implementing the external CalDAV backend to keep the architecture extensible.
 3. **Sync orchestration** — Designed in `docs/design-overview.md` but has no code. Should be scaffolded after the internal CalDAV server is stable and external CalDAV connections are possible.
 

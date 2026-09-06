@@ -35,14 +35,7 @@ warning — this is expected for auto-generated certificates).
 
 ### Prerequisites
 
-1. Initialize the database using Liquibase:
-
-```bash
-# Set up the database schema
-./scripts/db/migrate.sh update
-```
-
-2. Start the server:
+1. Start the server (it initializes or upgrades the canonical SQLite schema automatically):
 
 ```bash
 # Default: uses momentum.db in current directory, listens on https://localhost:8443
