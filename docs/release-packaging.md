@@ -31,6 +31,8 @@ Visit the [Releases page](https://github.com/chrisbelyea/momentum/releases) and 
 | Linux x86-64 | `momentum-server-linux-amd64.tar.gz` |
 | Linux ARM64 | `momentum-server-linux-arm64.tar.gz` |
 | Windows x86-64 | `momentum-server-windows-amd64.zip` |
+| macOS Intel | `momentum-server-darwin-amd64.tar.gz` |
+| macOS Apple Silicon | `momentum-server-darwin-arm64.tar.gz` |
 
 Each release also includes a `checksums.txt` file containing SHA-256 checksums for all archives.
 
@@ -81,11 +83,18 @@ The release pipeline is defined in [`.github/workflows/release.yml`](../.github/
 | Detail | Value |
 |--------|-------|
 | Trigger | Push to a `v*` tag |
-| Build tool | [GoReleaser](https://goreleaser.com/) inside the [`goreleaser-cross`](https://github.com/goreleaser/goreleaser-cross) Docker image |
-| Cross-compilation | Linux ARM64 via `aarch64-linux-gnu-gcc`; Windows via MinGW-w64 |
-| Archive format | `.tar.gz` (Linux), `.zip` (Windows) |
+| Build tool | [GoReleaser](https://goreleaser.com/) inside the [`goreleaser-cross`](https://github.com/goreleaser/goreleaser-cross) Docker image for Linux/Windows; native macOS GitHub-hosted runners for Darwin |
+| Cross-compilation | Linux ARM64 via `aarch64-linux-gnu-gcc`; Windows via MinGW-w64; macOS uses native Intel and Apple Silicon toolchains |
+| Archive format | `.tar.gz` (Linux/macOS), `.zip` (Windows) |
 | Checksum | SHA-256, collected in `checksums.txt` |
 | Release notes | Auto-generated from commit history |
+
+The macOS jobs intentionally do not use `goreleaser-cross`: its bundled
+linker can emit Mach-O binaries rejected by current macOS `dyld` with a
+missing `SG_READ_ONLY` flag. The release workflow builds each Darwin
+architecture on its native runner, attaches both archives to the GoReleaser
+draft, extends the same `checksums.txt`, and runs the complete smoke and
+fresh-database workflow before publication.
 
 ---
 
@@ -145,6 +154,8 @@ Set `GOOS` and `GOARCH` before running the script. Because `go-sqlite3` uses CGO
 | Linux x86-64 | `linux` | `amd64` | `gcc` (native) |
 | Linux ARM64 | `linux` | `arm64` | `aarch64-linux-gnu-gcc` |
 | Windows x86-64 | `windows` | `amd64` | `x86_64-w64-mingw32-gcc` |
+| macOS Intel | `darwin` | `amd64` | Apple Clang (native Intel runner) |
+| macOS Apple Silicon | `darwin` | `arm64` | Apple Clang (native arm64 runner) |
 
 Example (Linux cross-compile to ARM64):
 
@@ -176,8 +187,11 @@ Official Linux archives are built with CGO enabled and target glibc-based
 the system dynamic loader for the target architecture. Alpine/musl Linux is
 not an officially supported runtime target yet; build from source with a musl
 toolchain if you need it. Verify the target with `ldd --version` before
-deployment. Windows archives are native `windows/amd64` executables and do
-not require Go or a C compiler at runtime.
+deployment. Windows archives are native `windows/amd64` executables and macOS
+archives are native `darwin/amd64` or `darwin/arm64` executables; none require
+Go or a C compiler at runtime. macOS may require the normal first-run approval
+for a downloaded, unsigned application binary in Gatekeeper. Use the native
+architecture archive, or use Rosetta 2 for the Intel archive on Apple Silicon.
 
 ### Deployment as a service
 
