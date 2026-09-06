@@ -53,10 +53,10 @@ jobs:
           BINARY="$(find . -type f \( -name momentum-server -o -name momentum-server.exe \) -print -quit)"
           [[ -n "$BINARY" ]] || { echo 'release binary not found'; exit 1; }
           BINARY="$(cd "$(dirname "$BINARY")" && pwd)/$(basename "$BINARY")"
-          ASSET_ROOT="$(find . -type d -path '*/web/templates' -print -quit | xargs -r dirname)"
-          [[ -n "$ASSET_ROOT" ]] || { echo 'packaged web/templates not found'; exit 1; }
           LOG_FILE="$RUNNER_TEMP/momentum-smoke.log"
-          (cd "$ASSET_ROOT" && "$BINARY") >"$LOG_FILE" 2>&1 & SERVER_PID=$!
+          # Run outside the extracted archive. Web assets are embedded in the
+          # binary and must not require a co-located web/ directory.
+          (cd "$RUNNER_TEMP" && "$BINARY") >"$LOG_FILE" 2>&1 & SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true; cat "$LOG_FILE"' EXIT
           for _ in $(seq 1 20); do
             if curl -k -fsS https://localhost:8443/health >/dev/null; then exit 0; fi

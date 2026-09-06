@@ -10,6 +10,7 @@ import (
 
 	"github.com/chrisbelyea/momentum/internal/db"
 	"github.com/chrisbelyea/momentum/internal/models"
+	webassets "github.com/chrisbelyea/momentum/web"
 )
 
 // Handler handles web UI requests
@@ -22,7 +23,7 @@ type Handler struct {
 func NewHandler(taskRepo *db.TaskRepository) *Handler {
 	return &Handler{
 		taskRepo:  taskRepo,
-		templates: template.Must(template.ParseGlob("web/templates/*.html")),
+		templates: template.Must(template.ParseFS(webassets.Files, "templates/*.html")),
 	}
 }
 

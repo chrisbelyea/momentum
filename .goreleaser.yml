@@ -87,9 +87,6 @@ archives:
           - zip
     files:
       - LICENSE
-      # Include web templates and static assets so the server can render the UI on startup.
-      # Without these files the binary panics with: html/template: pattern matches no files.
-      - web/**/*
 
 checksum:
   name_template: "checksums.txt"

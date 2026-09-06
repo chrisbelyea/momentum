@@ -45,6 +45,11 @@ Momentum requires TLS. Set `TLS_CERT` and `TLS_KEY` before starting the server.
 See [docs/tls-setup.md](docs/tls-setup.md) for dev (mkcert / openssl) and production
 (Let's Encrypt) certificate setup.
 
+By default, Momentum stores its SQLite database in the current user's writable
+OS configuration directory: `~/.config/Momentum/momentum.db` on Linux and
+`%AppData%\\Momentum\\momentum.db` on Windows. Set `DB_PATH` to use a specific
+database location; an explicit value is used unchanged.
+
 ```bash
 export TLS_CERT=path/to/cert.pem
 export TLS_KEY=path/to/key.pem
