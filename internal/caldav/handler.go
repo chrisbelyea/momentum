@@ -1,7 +1,9 @@
 package caldav
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"net/http"
@@ -31,6 +33,10 @@ func NewHandler(taskRepo *db.TaskRepository) *Handler {
 // POST: Create a new task
 func (h *Handler) HandleTasks(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
+	case http.MethodOptions:
+		h.optionsCollection(w)
+	case "PROPFIND":
+		h.propfindTasks(w, r)
 	case http.MethodGet:
 		h.listTasks(w, r)
 	case http.MethodPost:
@@ -45,6 +51,10 @@ func (h *Handler) HandleTasks(w http.ResponseWriter, r *http.Request) {
 // PUT: Update a task
 // DELETE: Delete a task
 func (h *Handler) HandleTask(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		h.optionsResource(w)
+		return
+	}
 	// Extract task ID from path
 	taskIDStr := strings.TrimPrefix(r.URL.Path, "/caldav/tasks/")
 	if taskIDStr == "" {
@@ -74,19 +84,14 @@ func (h *Handler) HandleTask(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) listTasks(w http.ResponseWriter, r *http.Request) {
 	// Get backend_id from query parameter
 	backendIDStr := r.URL.Query().Get("backend_id")
-	if backendIDStr == "" {
-		http.Error(w, "backend_id query parameter is required", http.StatusBadRequest)
-		return
-	}
-
-	backendID, err := strconv.Atoi(backendIDStr)
-	if err != nil {
-		http.Error(w, "Invalid backend_id", http.StatusBadRequest)
-		return
-	}
 	userID, ok := auth.UserIDFromRequest(r)
 	if !ok {
 		userID = 1
+	}
+	backendID, err := backendIDForRequest(h.taskRepo, backendIDStr, userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	tasks, err := h.taskRepo.ListForUser(backendID, userID)
@@ -97,6 +102,138 @@ func (h *Handler) listTasks(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(tasks)
+}
+
+// options advertises the subset of WebDAV/CalDAV methods implemented by the
+// task collection and its resources. It is intentionally explicit so clients
+// do not infer support for REPORT, MKCALENDAR, or other unimplemented methods.
+func (h *Handler) optionsCollection(w http.ResponseWriter) {
+	w.Header().Set("Allow", "OPTIONS, GET, POST, PROPFIND")
+	w.Header().Set("DAV", "1, calendar-access")
+	w.Header().Set("MS-Author-Via", "DAV")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) optionsResource(w http.ResponseWriter) {
+	w.Header().Set("Allow", "OPTIONS, GET, PUT, DELETE")
+	w.Header().Set("DAV", "1, calendar-access")
+	w.Header().Set("MS-Author-Via", "DAV")
+	w.WriteHeader(http.StatusOK)
+}
+
+type propfindMultistatus struct {
+	XMLName   xml.Name           `xml:"D:multistatus"`
+	XMLNSD    string             `xml:"xmlns:D,attr"`
+	XMLNSC    string             `xml:"xmlns:C,attr"`
+	Responses []propfindResponse `xml:"D:response"`
+}
+
+type propfindResponse struct {
+	Href     string           `xml:"D:href"`
+	Propstat propfindPropstat `xml:"D:propstat"`
+}
+
+type propfindPropstat struct {
+	Prop   propfindProperties `xml:"D:prop"`
+	Status string             `xml:"D:status"`
+}
+
+type propfindProperties struct {
+	ResourceType       *propfindResourceType `xml:"D:resourcetype,omitempty"`
+	DisplayName        string                `xml:"D:displayname,omitempty"`
+	GetETag            string                `xml:"D:getetag,omitempty"`
+	GetContentType     string                `xml:"D:getcontenttype,omitempty"`
+	SupportedComponent *supportedComponents  `xml:"C:supported-calendar-component-set,omitempty"`
+}
+
+type propfindResourceType struct {
+	Collection *struct{} `xml:"D:collection,omitempty"`
+	Calendar   *struct{} `xml:"C:calendar,omitempty"`
+}
+
+type supportedComponents struct {
+	VTodo *struct{} `xml:"C:comp"`
+}
+
+// propfindTasks returns collection metadata and, for Depth: 1, each VTODO
+// resource. Unknown depth values are rejected rather than silently returning
+// an incomplete view of the collection.
+func (h *Handler) propfindTasks(w http.ResponseWriter, r *http.Request) {
+	depth := r.Header.Get("Depth")
+	if depth == "" {
+		depth = "0"
+	}
+	if depth != "0" && depth != "1" {
+		http.Error(w, "unsupported Depth", http.StatusBadRequest)
+		return
+	}
+	userID, ok := auth.UserIDFromRequest(r)
+	if !ok {
+		userID = 1
+	}
+	backendID, err := backendIDForRequest(h.taskRepo, r.URL.Query().Get("backend_id"), userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	tasks, err := h.taskRepo.ListForUser(backendID, userID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to list tasks: %v", err), http.StatusInternalServerError)
+		return
+	}
+	collectionETag := tasksETag(tasks)
+	responses := []propfindResponse{{
+		Href: canonicalCollectionHref(r),
+		Propstat: propfindPropstat{Status: "HTTP/1.1 200 OK", Prop: propfindProperties{
+			ResourceType: &propfindResourceType{Collection: &struct{}{}, Calendar: &struct{}{}},
+			DisplayName:  "Momentum Tasks", GetETag: collectionETag,
+			SupportedComponent: &supportedComponents{VTodo: &struct{}{}},
+		}},
+	}}
+	if depth == "1" {
+		for _, task := range tasks {
+			responses = append(responses, propfindResponse{
+				Href: fmt.Sprintf("/caldav/tasks/%d", task.ID),
+				Propstat: propfindPropstat{Status: "HTTP/1.1 200 OK", Prop: propfindProperties{
+					GetETag: taskETag(task), GetContentType: "text/calendar; component=VTODO",
+				}},
+			})
+		}
+	}
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.WriteHeader(http.StatusMultiStatus)
+	_ = xml.NewEncoder(w).Encode(propfindMultistatus{XMLNSD: "DAV:", XMLNSC: "urn:ietf:params:xml:ns:caldav", Responses: responses})
+}
+
+func backendIDForRequest(repo *db.TaskRepository, raw string, userID int) (int, error) {
+	if raw != "" {
+		id, err := strconv.Atoi(raw)
+		if err != nil || id <= 0 {
+			return 0, fmt.Errorf("invalid backend_id")
+		}
+		return id, nil
+	}
+	id, err := repo.DefaultBackendForUser(userID)
+	if err != nil {
+		return 0, fmt.Errorf("backend_id query parameter is required")
+	}
+	return id, nil
+}
+
+func canonicalCollectionHref(r *http.Request) string {
+	if strings.HasSuffix(r.URL.Path, "/") {
+		return r.URL.Path
+	}
+	return r.URL.Path + "/"
+}
+
+func tasksETag(tasks []*models.Task) string {
+	h := sha256.New()
+	for _, task := range tasks {
+		_, _ = h.Write([]byte(strconv.Itoa(task.ID)))
+		_, _ = h.Write([]byte(taskETag(task)))
+	}
+	return `"` + fmt.Sprintf("%x", h.Sum(nil)) + `"`
 }
 
 // getTask gets a single task by ID

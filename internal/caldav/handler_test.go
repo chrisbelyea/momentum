@@ -87,6 +87,59 @@ func TestICalendarTaskWorkflowAndConditionalRequests(t *testing.T) {
 	}
 }
 
+func TestCollectionOptionsAndDiscovery(t *testing.T) {
+	database := setupTestDB(t)
+	defer database.Close()
+	handler := NewHandler(db.NewTaskRepository(database))
+
+	options := httptest.NewRequest(http.MethodOptions, "/caldav/tasks", nil)
+	optionsRec := httptest.NewRecorder()
+	handler.HandleTasks(optionsRec, options)
+	if optionsRec.Code != http.StatusOK {
+		t.Fatalf("OPTIONS status = %d", optionsRec.Code)
+	}
+	if got := optionsRec.Header().Get("Allow"); got != "OPTIONS, GET, POST, PROPFIND" {
+		t.Fatalf("collection Allow = %q", got)
+	}
+	if got := optionsRec.Header().Get("DAV"); got != "1, calendar-access" {
+		t.Fatalf("DAV = %q", got)
+	}
+
+	task := &models.Task{BackendID: 1, Title: "Discoverable", Status: models.StatusNeedsAction}
+	if err := db.NewTaskRepository(database).Create(task); err != nil {
+		t.Fatal(err)
+	}
+	propfind := httptest.NewRequest("PROPFIND", "/caldav/tasks", nil)
+	propfind.Header.Set("Depth", "1")
+	propfindRec := httptest.NewRecorder()
+	handler.HandleTasks(propfindRec, propfind)
+	if propfindRec.Code != http.StatusMultiStatus {
+		t.Fatalf("PROPFIND status = %d: %s", propfindRec.Code, propfindRec.Body.String())
+	}
+	if got := propfindRec.Header().Get("Content-Type"); got != "application/xml; charset=utf-8" {
+		t.Fatalf("PROPFIND content type = %q", got)
+	}
+	body := propfindRec.Body.String()
+	for _, want := range []string{"/caldav/tasks/", "Momentum Tasks", "urn:ietf:params:xml:ns:caldav", "VTODO", fmt.Sprintf("/caldav/tasks/%d", task.ID), "text/calendar; component=VTODO", "getetag"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("PROPFIND response missing %q: %s", want, body)
+		}
+	}
+}
+
+func TestCollectionDiscoveryRejectsUnsupportedDepth(t *testing.T) {
+	database := setupTestDB(t)
+	defer database.Close()
+	handler := NewHandler(db.NewTaskRepository(database))
+	req := httptest.NewRequest("PROPFIND", "/caldav/tasks", nil)
+	req.Header.Set("Depth", "infinity")
+	rec := httptest.NewRecorder()
+	handler.HandleTasks(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for Depth infinity, got %d", rec.Code)
+	}
+}
+
 func TestCreateTask(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()
