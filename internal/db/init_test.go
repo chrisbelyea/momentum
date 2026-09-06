@@ -32,6 +32,15 @@ func TestInitializeSchema_CreatesTablesOnEmptyDB(t *testing.T) {
 			t.Errorf("Expected table %q to exist after InitializeSchema, got count=%d", table, count)
 		}
 	}
+	for _, column := range []string{"due_date_only", "start_date_only"} {
+		var count int
+		if err := database.QueryRow("SELECT count(*) FROM pragma_table_info('tasks') WHERE name=?", column).Scan(&count); err != nil {
+			t.Fatalf("failed to inspect tasks.%s: %v", column, err)
+		}
+		if count != 1 {
+			t.Errorf("expected tasks.%s to exist", column)
+		}
+	}
 }
 
 func TestInitializeSchema_IdempotentOnExistingSchema(t *testing.T) {

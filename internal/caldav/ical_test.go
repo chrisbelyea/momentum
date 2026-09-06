@@ -28,3 +28,16 @@ func TestTodoTaskConversionPreservesProviderFields(t *testing.T) {
 		t.Fatalf("extensions lost: %#v", roundTrip.Extra)
 	}
 }
+
+func TestTodoTaskConversionPreservesDateOnlySemantics(t *testing.T) {
+	todo := &vtodo.Todo{UID: "date-only", Summary: "All day", Status: models.StatusNeedsAction,
+		DueDateOnly: true, StartDateOnly: true}
+	task := taskFromTodo(todo)
+	if !task.DueDateOnly || !task.StartDateOnly {
+		t.Fatal("date-only flags were not copied into the canonical task")
+	}
+	roundTrip := todoFromTask(&task)
+	if !roundTrip.DueDateOnly || !roundTrip.StartDateOnly {
+		t.Fatal("date-only flags were not restored for VTODO serialization")
+	}
+}
