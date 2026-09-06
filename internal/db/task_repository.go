@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/chrisbelyea/momentum/internal/models"
+	"github.com/google/uuid"
 )
 
 // TaskRepository handles task database operations
@@ -21,8 +22,9 @@ func NewTaskRepository(db *sql.DB) *TaskRepository {
 // List returns all tasks for a given backend
 func (r *TaskRepository) List(backendID int) ([]*models.Task, error) {
 	query := `
-		SELECT id, backend_id, external_id, title, description, status, 
-		       priority, due_at, tags_json, created_at, updated_at
+		SELECT id, backend_id, uid, external_id, title, description, status,
+		       priority, due_at, start_at, completed_at, dtstamp, last_modified,
+		       sequence, percent_complete, tags_json, related_to_json, url, location, extra_json, created_at, updated_at
 		FROM tasks
 		WHERE backend_id = ?
 		ORDER BY created_at DESC
@@ -40,13 +42,24 @@ func (r *TaskRepository) List(backendID int) ([]*models.Task, error) {
 		err := rows.Scan(
 			&taskRow.ID,
 			&taskRow.BackendID,
+			&taskRow.UID,
 			&taskRow.ExternalID,
 			&taskRow.Title,
 			&taskRow.Description,
 			&taskRow.Status,
 			&taskRow.Priority,
 			&taskRow.DueAt,
+			&taskRow.StartAt,
+			&taskRow.CompletedAt,
+			&taskRow.DTStamp,
+			&taskRow.LastModified,
+			&taskRow.Sequence,
+			&taskRow.PercentComplete,
 			&taskRow.TagsJSON,
+			&taskRow.RelatedToJSON,
+			&taskRow.URL,
+			&taskRow.Location,
+			&taskRow.ExtraJSON,
 			&taskRow.CreatedAt,
 			&taskRow.UpdatedAt,
 		)
@@ -113,8 +126,9 @@ func (r *TaskRepository) DefaultBackendForUser(userID int) (int, error) {
 // Get returns a single task by ID
 func (r *TaskRepository) Get(id int) (*models.Task, error) {
 	query := `
-		SELECT id, backend_id, external_id, title, description, status, 
-		       priority, due_at, tags_json, created_at, updated_at
+		SELECT id, backend_id, uid, external_id, title, description, status,
+		       priority, due_at, start_at, completed_at, dtstamp, last_modified,
+		       sequence, percent_complete, tags_json, related_to_json, url, location, extra_json, created_at, updated_at
 		FROM tasks
 		WHERE id = ?
 	`
@@ -123,13 +137,24 @@ func (r *TaskRepository) Get(id int) (*models.Task, error) {
 	err := r.db.QueryRow(query, id).Scan(
 		&taskRow.ID,
 		&taskRow.BackendID,
+		&taskRow.UID,
 		&taskRow.ExternalID,
 		&taskRow.Title,
 		&taskRow.Description,
 		&taskRow.Status,
 		&taskRow.Priority,
 		&taskRow.DueAt,
+		&taskRow.StartAt,
+		&taskRow.CompletedAt,
+		&taskRow.DTStamp,
+		&taskRow.LastModified,
+		&taskRow.Sequence,
+		&taskRow.PercentComplete,
 		&taskRow.TagsJSON,
+		&taskRow.RelatedToJSON,
+		&taskRow.URL,
+		&taskRow.Location,
+		&taskRow.ExtraJSON,
 		&taskRow.CreatedAt,
 		&taskRow.UpdatedAt,
 	)
@@ -153,26 +178,47 @@ func (r *TaskRepository) Get(id int) (*models.Task, error) {
 func (r *TaskRepository) Create(task *models.Task) error {
 	// Set timestamps
 	now := time.Now()
+	if task.UID == "" {
+		task.UID = uuid.NewString()
+	}
 	task.CreatedAt = now
 	task.UpdatedAt = &now
+	if task.DTStamp.IsZero() {
+		task.DTStamp = now
+	}
+	if task.LastModified == nil {
+		task.LastModified = &now
+	}
 
 	query := `
 		INSERT INTO tasks (
-			backend_id, external_id, title, description, status,
-			priority, due_at, tags_json, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			backend_id, uid, external_id, title, description, status,
+			priority, due_at, start_at, completed_at, dtstamp, last_modified,
+			sequence, percent_complete, tags_json, related_to_json, url, location, extra_json, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	result, err := r.db.Exec(
 		query,
 		task.BackendID,
+		task.UID,
 		task.ExternalID,
 		task.Title,
 		task.Description,
 		task.Status,
 		task.Priority,
 		task.DueAt,
+		task.StartAt,
+		task.CompletedAt,
+		task.DTStamp,
+		task.LastModified,
+		task.Sequence,
+		task.PercentComplete,
 		task.TagsJSON,
+		task.RelatedToJSON,
+		task.URL,
+		task.Location,
+		task.ExtraJSON,
 		task.CreatedAt,
 		task.UpdatedAt,
 	)
@@ -199,21 +245,33 @@ func (r *TaskRepository) Update(task *models.Task) error {
 
 	query := `
 		UPDATE tasks
-		SET backend_id = ?, external_id = ?, title = ?, description = ?,
-		    status = ?, priority = ?, due_at = ?, tags_json = ?, updated_at = ?
+		SET backend_id = ?, uid = ?, external_id = ?, title = ?, description = ?,
+		    status = ?, priority = ?, due_at = ?, start_at = ?, completed_at = ?,
+		    last_modified = ?, sequence = ?, percent_complete = ?, tags_json = ?,
+		    related_to_json = ?, url = ?, location = ?, extra_json = ?, updated_at = ?
 		WHERE id = ?
 	`
 
 	result, err := r.db.Exec(
 		query,
 		task.BackendID,
+		task.UID,
 		task.ExternalID,
 		task.Title,
 		task.Description,
 		task.Status,
 		task.Priority,
 		task.DueAt,
+		task.StartAt,
+		task.CompletedAt,
+		task.LastModified,
+		task.Sequence,
+		task.PercentComplete,
 		task.TagsJSON,
+		task.RelatedToJSON,
+		task.URL,
+		task.Location,
+		task.ExtraJSON,
 		task.UpdatedAt,
 		task.ID,
 	)
