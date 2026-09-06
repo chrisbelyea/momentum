@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 type Handler struct {
 	taskRepo    *db.TaskRepository
 	backendRepo *db.BackendRepository
+	syncRepo    *db.SyncRepository
 	templates   *template.Template
 }
 
@@ -32,6 +34,13 @@ func NewHandler(taskRepo *db.TaskRepository, backendRepos ...*db.BackendReposito
 		backendRepo: backendRepo,
 		templates:   template.Must(template.ParseFS(webassets.Files, "templates/*.html")),
 	}
+}
+
+// SetSyncRepository enables the authenticated sync status and conflict
+// recovery API. Keeping this optional preserves the lightweight handler setup
+// used by task-only tests and embedders.
+func (h *Handler) SetSyncRepository(syncRepo *db.SyncRepository) {
+	h.syncRepo = syncRepo
 }
 
 // HandleIndex serves the main kanban board page
@@ -337,4 +346,106 @@ func (h *Handler) HandleUpdateStatus(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(task)
+}
+
+// HandleSyncConflicts exposes retained local/provider snapshots and the Phase
+// 1 manual recovery path. Authentication and backend ownership are enforced by
+// the repository query, so a conflict ID cannot disclose another user's data.
+// GET /api/sync/conflicts[?status=open&backend_id=N] lists conflicts.
+// GET /api/sync/conflicts/{id} returns one conflict.
+// PATCH /api/sync/conflicts/{id} resolves with {"resolution":"local"},
+// {"resolution":"remote"}, or {"resolution":"dismissed"}.
+func (h *Handler) HandleSyncConflicts(w http.ResponseWriter, r *http.Request) {
+	if h.syncRepo == nil {
+		http.Error(w, "sync recovery is unavailable", http.StatusNotImplemented)
+		return
+	}
+	userID, ok := auth.UserIDFromRequest(r)
+	if !ok {
+		userID = 1
+	}
+	path := strings.TrimPrefix(r.URL.Path, "/api/sync/conflicts")
+	if path == "" || path == "/" {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		backendID := 0
+		if raw := r.URL.Query().Get("backend_id"); raw != "" {
+			parsed, err := strconv.Atoi(raw)
+			if err != nil || parsed <= 0 {
+				http.Error(w, "invalid backend_id", http.StatusBadRequest)
+				return
+			}
+			backendID = parsed
+		}
+		status := r.URL.Query().Get("status")
+		if status == "" {
+			status = "open"
+		} else if status == "all" {
+			status = ""
+		}
+		conflicts, err := h.syncRepo.ListConflicts(r.Context(), userID, status, backendID)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to list sync conflicts: %v", err), http.StatusInternalServerError)
+			return
+		}
+		writeSyncConflicts(w, conflicts)
+		return
+	}
+	id, err := strconv.Atoi(strings.Trim(path, "/"))
+	if err != nil || id <= 0 {
+		http.Error(w, "invalid conflict ID", http.StatusBadRequest)
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		conflict, err := h.syncRepo.GetConflict(r.Context(), userID, id)
+		if err != nil {
+			if errors.Is(err, db.ErrNotFound) {
+				http.Error(w, "sync conflict not found", http.StatusNotFound)
+				return
+			}
+			http.Error(w, fmt.Sprintf("failed to get sync conflict: %v", err), http.StatusInternalServerError)
+			return
+		}
+		writeSyncConflict(w, *conflict)
+	case http.MethodPatch:
+		var request struct {
+			Resolution string `json:"resolution"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&request); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		conflict, err := h.syncRepo.ResolveConflict(r.Context(), userID, id, request.Resolution)
+		if err != nil {
+			if errors.Is(err, db.ErrNotFound) {
+				http.Error(w, "sync conflict not found", http.StatusNotFound)
+				return
+			}
+			if errors.Is(err, db.ErrInvalidConflictResolution) || errors.Is(err, db.ErrConflictAlreadyResolved) || errors.Is(err, db.ErrConflictNoTask) || errors.Is(err, db.ErrInvalidConflictSnapshot) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, fmt.Sprintf("failed to resolve sync conflict: %v", err), http.StatusInternalServerError)
+			return
+		}
+		writeSyncConflict(w, *conflict)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func writeSyncConflicts(w http.ResponseWriter, conflicts []db.SyncConflict) {
+	w.Header().Set("Content-Type", "application/json")
+	if conflicts == nil {
+		conflicts = []db.SyncConflict{}
+	}
+	_ = json.NewEncoder(w).Encode(conflicts)
+}
+
+func writeSyncConflict(w http.ResponseWriter, conflict db.SyncConflict) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(conflict)
 }

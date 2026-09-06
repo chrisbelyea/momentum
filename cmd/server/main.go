@@ -110,6 +110,7 @@ func runServer(stop <-chan os.Signal) {
 
 	// Initialize Web handler
 	webHandler := web.NewHandler(taskRepo, backendRepo)
+	webHandler.SetSyncRepository(db.NewSyncRepository(database))
 
 	// Setup routes
 	mux := http.NewServeMux()
@@ -155,6 +156,8 @@ func runServer(stop <-chan os.Signal) {
 	mux.Handle("/list", authService.Require(http.HandlerFunc(webHandler.HandleList)))
 	mux.Handle("/api/tasks", authService.Require(http.HandlerFunc(webHandler.HandleTasks)))
 	mux.Handle("/api/tasks/", authService.Require(http.HandlerFunc(webHandler.HandleTasks)))
+	mux.Handle("/api/sync/conflicts", authService.Require(http.HandlerFunc(webHandler.HandleSyncConflicts)))
+	mux.Handle("/api/sync/conflicts/", authService.Require(http.HandlerFunc(webHandler.HandleSyncConflicts)))
 
 	// CalDAV routes
 	mux.Handle("/caldav/tasks", authService.Require(http.HandlerFunc(caldavHandler.HandleTasks)))
