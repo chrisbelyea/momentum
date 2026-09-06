@@ -1,10 +1,12 @@
 package caldav
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net"
@@ -16,7 +18,38 @@ import (
 	"time"
 
 	"github.com/chrisbelyea/momentum/internal/models"
+	"github.com/chrisbelyea/momentum/pkg/vtodo"
 )
+
+const maxCalDAVResponseBytes = 2 << 20
+
+// Collection describes a VTODO-capable CalDAV collection discovered from a
+// server. Href is an absolute URL safe to pass to the CRUD methods below.
+type Collection struct {
+	Href        string
+	DisplayName string
+	Components  []string
+}
+
+// RemoteTodo contains a canonical VTODO and the provider metadata needed for
+// conditional updates and deletes.
+type RemoteTodo struct {
+	Href string
+	ETag string
+	Todo *vtodo.Todo
+}
+
+// HTTPError reports a non-success response without exposing an unbounded
+// response body to callers.
+type HTTPError struct {
+	Method string
+	URL    string
+	Status int
+}
+
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("CalDAV %s %s returned HTTP %d", e.Method, e.URL, e.Status)
+}
 
 // Client represents a CalDAV client for external server connections
 type Client struct {
@@ -121,6 +154,238 @@ func (c *Client) ValidateConnection() error {
 	}
 
 	return nil
+}
+
+// DiscoverCollections finds VTODO-capable collections below the configured
+// CalDAV URL. Servers may return relative hrefs; these are resolved against
+// the configured origin and are rejected if they cross that origin.
+func (c *Client) DiscoverCollections(ctx context.Context) ([]Collection, error) {
+	body := []byte(`<?xml version="1.0" encoding="utf-8" ?>
+<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:prop><d:displayname/><d:resourcetype/><c:supported-calendar-component-set/></d:prop>
+</d:propfind>`)
+	resp, err := c.do(ctx, "PROPFIND", c.config.URL, body, func(req *http.Request) {
+		req.Header.Set("Depth", "1")
+		req.Header.Set("Content-Type", "application/xml; charset=utf-8")
+		req.Header.Set("Accept", "application/xml")
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMultiStatus {
+		return nil, &HTTPError{Method: "PROPFIND", URL: c.config.URL, Status: resp.StatusCode}
+	}
+	var result multistatus
+	if err := xml.NewDecoder(io.LimitReader(resp.Body, maxCalDAVResponseBytes)).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode CalDAV discovery response: %w", err)
+	}
+	collections := make([]Collection, 0, len(result.Responses))
+	for _, item := range result.Responses {
+		href, err := c.resolveRemote(item.Href)
+		if err != nil {
+			return nil, fmt.Errorf("invalid discovered href %q: %w", item.Href, err)
+		}
+		var components []string
+		for _, component := range item.Propstat.Prop.Components {
+			components = append(components, component.Name)
+		}
+		if item.Propstat.Prop.ResourceType.Calendar == nil && len(components) == 0 {
+			continue
+		}
+		collections = append(collections, Collection{Href: href, DisplayName: item.Propstat.Prop.DisplayName, Components: components})
+	}
+	return collections, nil
+}
+
+// GetTodo retrieves and parses one external VTODO resource.
+func (c *Client) GetTodo(ctx context.Context, href string) (*RemoteTodo, error) {
+	return c.fetchTodo(ctx, http.MethodGet, href)
+}
+
+// CreateTodo creates a resource in collection using UID. If the server does
+// not support POST, PUT with If-None-Match is the interoperable fallback.
+func (c *Client) CreateTodo(ctx context.Context, collectionHref string, todo *vtodo.Todo) (*RemoteTodo, error) {
+	if todo == nil {
+		return nil, fmt.Errorf("VTODO cannot be nil")
+	}
+	body, err := todo.Marshal()
+	if err != nil {
+		return nil, err
+	}
+	collection, err := c.resolveRemote(collectionHref)
+	if err != nil {
+		return nil, err
+	}
+	u, _ := url.Parse(collection)
+	resource := strings.TrimRight(u.Path, "/") + "/" + url.PathEscape(todo.UID) + ".ics"
+	u.Path = resource
+	return c.putTodo(ctx, u.String(), body, "*")
+}
+
+// UpdateTodo replaces a resource. etag is sent as If-Match when non-empty.
+func (c *Client) UpdateTodo(ctx context.Context, href string, todo *vtodo.Todo, etag string) (*RemoteTodo, error) {
+	if todo == nil {
+		return nil, fmt.Errorf("VTODO cannot be nil")
+	}
+	body, err := todo.Marshal()
+	if err != nil {
+		return nil, err
+	}
+	u, err := c.resolveRemote(href)
+	if err != nil {
+		return nil, err
+	}
+	return c.putTodo(ctx, u, body, etag)
+}
+
+// DeleteTodo deletes a resource. etag is sent as If-Match when non-empty.
+func (c *Client) DeleteTodo(ctx context.Context, href, etag string) error {
+	u, err := c.resolveRemote(href)
+	if err != nil {
+		return err
+	}
+	resp, err := c.do(ctx, http.MethodDelete, u, nil, func(req *http.Request) {
+		if etag != "" {
+			req.Header.Set("If-Match", etag)
+		}
+	})
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxCalDAVResponseBytes))
+	if resp.StatusCode != http.StatusNoContent && (resp.StatusCode < 200 || resp.StatusCode >= 300) {
+		return &HTTPError{Method: http.MethodDelete, URL: u, Status: resp.StatusCode}
+	}
+	return nil
+}
+
+func (c *Client) putTodo(ctx context.Context, href string, body []byte, condition string) (*RemoteTodo, error) {
+	resp, err := c.do(ctx, http.MethodPut, href, body, func(req *http.Request) {
+		req.Header.Set("Content-Type", "text/calendar; component=VTODO; charset=utf-8")
+		req.Header.Set("Accept", "text/calendar")
+		if condition != "" {
+			req.Header.Set("If-Match", condition)
+		}
+		if condition == "*" {
+			req.Header.Del("If-Match")
+			req.Header.Set("If-None-Match", "*")
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxCalDAVResponseBytes))
+		return nil, &HTTPError{Method: http.MethodPut, URL: href, Status: resp.StatusCode}
+	}
+	result := &RemoteTodo{Href: href, ETag: resp.Header.Get("ETag")}
+	if location := resp.Header.Get("Location"); location != "" {
+		resolved, resolveErr := c.resolveRemote(location)
+		if resolveErr != nil {
+			return nil, fmt.Errorf("invalid CalDAV Location header: %w", resolveErr)
+		}
+		result.Href = resolved
+	}
+	if resp.ContentLength != 0 {
+		data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxCalDAVResponseBytes))
+		if readErr != nil {
+			return nil, fmt.Errorf("read CalDAV PUT response: %w", readErr)
+		}
+		if len(bytes.TrimSpace(data)) > 0 {
+			result.Todo, err = vtodo.Parse(data)
+			if err != nil {
+				return nil, fmt.Errorf("parse CalDAV PUT response: %w", err)
+			}
+		}
+	}
+	return result, nil
+}
+
+func (c *Client) fetchTodo(ctx context.Context, method, href string) (*RemoteTodo, error) {
+	u, err := c.resolveRemote(href)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.do(ctx, method, u, nil, func(req *http.Request) {
+		req.Header.Set("Accept", "text/calendar, text/plain")
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, &HTTPError{Method: method, URL: u, Status: resp.StatusCode}
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxCalDAVResponseBytes))
+	if err != nil {
+		return nil, fmt.Errorf("read CalDAV response: %w", err)
+	}
+	todo, err := vtodo.Parse(data)
+	if err != nil {
+		return nil, fmt.Errorf("parse CalDAV VTODO: %w", err)
+	}
+	return &RemoteTodo{Href: u, ETag: resp.Header.Get("ETag"), Todo: todo}, nil
+}
+
+func (c *Client) do(ctx context.Context, method, rawURL string, body []byte, configure func(*http.Request)) (*http.Response, error) {
+	u, err := c.resolveRemote(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create CalDAV request: %w", err)
+	}
+	if c.config.Username != "" && c.config.Password != "" {
+		req.SetBasicAuth(c.config.Username, c.config.Password)
+	}
+	if configure != nil {
+		configure(req)
+	}
+	return c.httpClient.Do(req)
+}
+
+func (c *Client) resolveRemote(raw string) (string, error) {
+	base, err := url.Parse(c.config.URL)
+	if err != nil {
+		return "", err
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.IsAbs() && u.Scheme != "https" || u.User != nil || u.Fragment != "" {
+		return "", fmt.Errorf("invalid external CalDAV href")
+	}
+	if !u.IsAbs() {
+		u = base.ResolveReference(u)
+	}
+	if u.Scheme != base.Scheme || !strings.EqualFold(u.Host, base.Host) {
+		return "", fmt.Errorf("external CalDAV href crosses configured origin")
+	}
+	return u.String(), nil
+}
+
+type multistatus struct {
+	Responses []multistatusResponse `xml:"response"`
+}
+type multistatusResponse struct {
+	Href     string   `xml:"href"`
+	Propstat propstat `xml:"propstat"`
+}
+type propstat struct {
+	Prop   discoveryProp `xml:"prop"`
+	Status string        `xml:"status"`
+}
+type discoveryProp struct {
+	DisplayName  string `xml:"displayname"`
+	ResourceType struct {
+		Collection *struct{} `xml:"collection"`
+		Calendar   *struct{} `xml:"calendar"`
+	} `xml:"resourcetype"`
+	Components []struct {
+		Name string `xml:"name,attr"`
+	} `xml:"supported-calendar-component-set>comp"`
 }
 
 // validateTargetURL applies the outbound CalDAV SSRF policy before any
