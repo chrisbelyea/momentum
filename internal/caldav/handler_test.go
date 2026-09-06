@@ -98,7 +98,7 @@ func TestCollectionOptionsAndDiscovery(t *testing.T) {
 	if optionsRec.Code != http.StatusOK {
 		t.Fatalf("OPTIONS status = %d", optionsRec.Code)
 	}
-	if got := optionsRec.Header().Get("Allow"); got != "OPTIONS, GET, POST, PROPFIND" {
+	if got := optionsRec.Header().Get("Allow"); got != "OPTIONS, GET, POST, PROPFIND, REPORT" {
 		t.Fatalf("collection Allow = %q", got)
 	}
 	if got := optionsRec.Header().Get("DAV"); got != "1, calendar-access" {
@@ -124,6 +124,62 @@ func TestCollectionOptionsAndDiscovery(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("PROPFIND response missing %q: %s", want, body)
 		}
+	}
+}
+
+func TestCalendarReportsReturnVTODOResources(t *testing.T) {
+	database := setupTestDB(t)
+	defer database.Close()
+	repo := db.NewTaskRepository(database)
+	for _, title := range []string{"One", "Two"} {
+		if err := repo.Create(&models.Task{BackendID: 1, Title: title, Status: models.StatusNeedsAction}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	handler := NewHandler(repo)
+	query := httptest.NewRequest("REPORT", "/caldav/tasks?backend_id=1", strings.NewReader(`<?xml version="1.0"?><c:calendar-query xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:d="DAV:"><d:prop><d:getetag/><c:calendar-data/></d:prop></c:calendar-query>`))
+	query.Header.Set("Content-Type", "application/xml")
+	rec := httptest.NewRecorder()
+	handler.HandleTasks(rec, query)
+	if rec.Code != http.StatusMultiStatus {
+		t.Fatalf("calendar-query status = %d: %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/xml; charset=utf-8" {
+		t.Fatalf("calendar-query content type = %q", got)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"calendar-data", "getetag", "SUMMARY:One", "SUMMARY:Two", "HTTP/1.1 200 OK"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("calendar-query response missing %q: %s", want, body)
+		}
+	}
+
+	tasks, err := repo.ListForUser(1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	multigetBody := fmt.Sprintf(`<?xml version="1.0"?><c:calendar-multiget xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:d="DAV:"><d:prop><d:getetag/><c:calendar-data/></d:prop><d:href>/caldav/tasks/%d</d:href><d:href>/caldav/tasks/99999</d:href></c:calendar-multiget>`, tasks[0].ID)
+	multiget := httptest.NewRequest("REPORT", "/caldav/tasks?backend_id=1", strings.NewReader(multigetBody))
+	multiget.Header.Set("Content-Type", "application/xml")
+	multigetRec := httptest.NewRecorder()
+	handler.HandleTasks(multigetRec, multiget)
+	if multigetRec.Code != http.StatusMultiStatus {
+		t.Fatalf("calendar-multiget status = %d: %s", multigetRec.Code, multigetRec.Body.String())
+	}
+	if !strings.Contains(multigetRec.Body.String(), "SUMMARY:") || !strings.Contains(multigetRec.Body.String(), "404 Not Found") {
+		t.Fatalf("calendar-multiget did not preserve success and missing-resource responses: %s", multigetRec.Body.String())
+	}
+}
+
+func TestCalendarReportRejectsUnsupportedShape(t *testing.T) {
+	database := setupTestDB(t)
+	defer database.Close()
+	handler := NewHandler(db.NewTaskRepository(database))
+	req := httptest.NewRequest("REPORT", "/caldav/tasks?backend_id=1", strings.NewReader(`<c:free-busy-query xmlns:c="urn:ietf:params:xml:ns:caldav"/>`))
+	rec := httptest.NewRecorder()
+	handler.HandleTasks(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("unsupported REPORT status = %d, want 400", rec.Code)
 	}
 }
 
