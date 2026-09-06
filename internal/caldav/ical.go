@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
@@ -27,10 +28,14 @@ func readBody(r *http.Request) []byte {
 }
 
 func taskFromTodo(t *vtodo.Todo) models.Task {
+	tagsJSON := jsonString(t.Categories)
+	relatedJSON := jsonString(t.RelatedTo)
+	extraJSON := jsonString(t.Extra)
 	return models.Task{UID: t.UID, Title: t.Summary, Description: stringPtr(t.Description), Status: t.Status,
 		Priority: t.Priority, DueAt: t.Due, StartAt: t.Start, CompletedAt: t.Completed,
 		DTStamp: t.DTStamp, LastModified: t.LastModified, Sequence: t.Sequence,
-		PercentComplete: t.PercentComplete, URL: stringPtr(t.URL), Location: stringPtr(t.Location)}
+		PercentComplete: t.PercentComplete, TagsJSON: tagsJSON, RelatedToJSON: relatedJSON,
+		ExtraJSON: extraJSON, URL: stringPtr(t.URL), Location: stringPtr(t.Location)}
 }
 
 func todoFromTask(t *models.Task) *vtodo.Todo {
@@ -52,7 +57,43 @@ func todoFromTask(t *models.Task) *vtodo.Todo {
 	}
 	return &vtodo.Todo{UID: t.UID, Summary: t.Title, Description: d, Status: t.Status, Due: t.DueAt,
 		Start: t.StartAt, Completed: t.CompletedAt, DTStamp: stamp, LastModified: t.LastModified,
-		Priority: t.Priority, PercentComplete: t.PercentComplete, Sequence: t.Sequence, URL: u, Location: l}
+		Priority: t.Priority, PercentComplete: t.PercentComplete, Sequence: t.Sequence,
+		Categories: decodeStrings(t.TagsJSON), RelatedTo: decodeStrings(t.RelatedToJSON),
+		Extra: decodeProperties(t.ExtraJSON), URL: u, Location: l}
+}
+
+func jsonString(value any) *string {
+	if lenValue, ok := value.([]string); ok && len(lenValue) == 0 {
+		return nil
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return nil
+	}
+	s := string(data)
+	return &s
+}
+
+func decodeStrings(value *string) []string {
+	if value == nil {
+		return nil
+	}
+	var result []string
+	if json.Unmarshal([]byte(*value), &result) != nil {
+		return nil
+	}
+	return result
+}
+
+func decodeProperties(value *string) []vtodo.Property {
+	if value == nil {
+		return nil
+	}
+	var result []vtodo.Property
+	if json.Unmarshal([]byte(*value), &result) != nil {
+		return nil
+	}
+	return result
 }
 
 func stringPtr(s string) *string {
