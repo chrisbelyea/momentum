@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
+
+	syncengine "github.com/chrisbelyea/momentum/internal/sync"
 )
 
 // SyncCheckpoint is the durable cursor and retry state for one backend.
@@ -34,6 +36,20 @@ type SyncEntity struct {
 	LastPulledAt   *time.Time
 	LastPushedAt   *time.Time
 	DeletedAt      *time.Time
+}
+
+// Mapping converts durable provider state into the provider-neutral planner
+// input. Keeping this adapter here prevents reconciliation code from knowing
+// about SQLite row layouts while preserving the exact checkpoint baseline.
+func (e SyncEntity) Mapping() syncengine.EntityMapping {
+	return syncengine.EntityMapping{
+		BackendID:      e.BackendID,
+		TaskID:         e.TaskID,
+		RemoteUID:      e.RemoteUID,
+		RemoteETag:     e.RemoteETag,
+		RemoteSequence: e.RemoteSequence,
+		LastPulledAt:   e.LastPulledAt,
+	}
 }
 
 // SyncOperation records an attempted provider operation, including failures
@@ -67,6 +83,54 @@ type SyncConflict struct {
 type SyncRepository struct{ db *sql.DB }
 
 func NewSyncRepository(db *sql.DB) *SyncRepository { return &SyncRepository{db: db} }
+
+// ListEntities returns the durable provider mappings used as the baseline for
+// reconciliation. A missing baseline is represented by nil timestamps rather
+// than being guessed as a local edit.
+func (r *SyncRepository) ListEntities(ctx context.Context, backendID int) ([]SyncEntity, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id,backend_id,task_id,remote_uid,remote_href,remote_etag,remote_sequence,state,last_pulled_at,last_pushed_at,deleted_at FROM sync_entities WHERE backend_id=? ORDER BY id`, backendID)
+	if err != nil {
+		return nil, fmt.Errorf("list sync entities: %w", err)
+	}
+	defer rows.Close()
+	var entities []SyncEntity
+	for rows.Next() {
+		var entity SyncEntity
+		var taskID, remoteSequence sql.NullInt64
+		var href, etag, state sql.NullString
+		var pulled, pushed, deleted sql.NullString
+		if err := rows.Scan(&entity.ID, &entity.BackendID, &taskID, &entity.RemoteUID, &href, &etag, &remoteSequence, &state, &pulled, &pushed, &deleted); err != nil {
+			return nil, fmt.Errorf("scan sync entity: %w", err)
+		}
+		if taskID.Valid {
+			value := int(taskID.Int64)
+			entity.TaskID = &value
+		}
+		entity.RemoteHref, entity.RemoteETag, entity.State = href.String, etag.String, state.String
+		if remoteSequence.Valid {
+			value := int(remoteSequence.Int64)
+			entity.RemoteSequence = &value
+		}
+		for _, item := range []struct {
+			value  sql.NullString
+			target **time.Time
+			name   string
+		}{{pulled, &entity.LastPulledAt, "last_pulled_at"}, {pushed, &entity.LastPushedAt, "last_pushed_at"}, {deleted, &entity.DeletedAt, "deleted_at"}} {
+			if item.value.Valid {
+				parsed, parseErr := parseTimestamp(item.value.String)
+				if parseErr != nil {
+					return nil, fmt.Errorf("parse sync entity %s: %w", item.name, parseErr)
+				}
+				*item.target = &parsed
+			}
+		}
+		entities = append(entities, entity)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate sync entities: %w", err)
+	}
+	return entities, nil
+}
 
 func (r *SyncRepository) GetCheckpoint(backendID int) (*SyncCheckpoint, error) {
 	var c SyncCheckpoint
