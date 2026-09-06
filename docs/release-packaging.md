@@ -36,6 +36,9 @@ Visit the [Releases page](https://github.com/chrisbelyea/momentum/releases) and 
 
 Each release also includes a `checksums.txt` file containing SHA-256 checksums for all archives.
 
+The archives also include `scripts/packaging/` with the native launch and
+service setup helpers described below.
+
 ### Verifying Checksums
 
 After downloading, verify the archive against the published checksum:
