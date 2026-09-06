@@ -1,10 +1,54 @@
 package vtodo
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestProviderVariantFixtures(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		wantUID    string
+		wantStatus string
+		wantExtra  string
+		dateOnly   bool
+	}{
+		{"provider-google.vcf", "google-task-1@example.com", "IN-PROCESS", "X-GOOGLE-REFERENCE", true},
+		{"provider-apple.vcf", "apple-task-1@example.com", "CANCELLED", "X-APPLE-SORT-ORDER", false},
+	} {
+		raw, err := os.ReadFile(filepath.Join("testdata", tc.name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		todo, err := Parse(raw)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if todo.UID != tc.wantUID || todo.Status != tc.wantStatus || todo.StartDateOnly != tc.dateOnly {
+			t.Fatalf("%s: unexpected canonical fields: %#v", tc.name, todo)
+		}
+		found := false
+		for _, property := range todo.Extra {
+			found = found || property.Name == tc.wantExtra
+		}
+		if !found {
+			t.Fatalf("%s: provider extension %s was dropped", tc.name, tc.wantExtra)
+		}
+	}
+}
+
+func TestMalformedProviderFixtureIsRejected(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "malformed-missing-uid.vcf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Parse(raw); err == nil {
+		t.Fatal("malformed provider fixture was accepted")
+	}
+}
 
 func validTodo() *Todo {
 	stamp := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
