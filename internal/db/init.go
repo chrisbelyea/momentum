@@ -9,6 +9,11 @@ import (
 //go:embed schema/init.sql
 var initSchemaSQL string
 
+//go:embed schema/changelog/002-auth.sql
+var authSchemaSQL string
+
+const schemaVersion = 2
+
 // InitializeSchema creates a fresh database or upgrades an older shipped
 // shape. The migration ledger prevents a partial schema from being treated as
 // current and makes repeated startup safe.
@@ -28,7 +33,10 @@ func InitializeSchema(database *sql.DB) error {
 			return fmt.Errorf("migrate database schema: %w", err)
 		}
 	}
-	_, err = database.Exec("INSERT OR REPLACE INTO momentum_schema_migrations(version) VALUES (1)")
+	if _, err := database.Exec(authSchemaSQL); err != nil {
+		return fmt.Errorf("apply authentication schema: %w", err)
+	}
+	_, err = database.Exec("INSERT OR REPLACE INTO momentum_schema_migrations(version) VALUES (?)", schemaVersion)
 	return err
 }
 
