@@ -3,9 +3,11 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/chrisbelyea/momentum/internal/models"
 	syncengine "github.com/chrisbelyea/momentum/internal/sync"
 )
 
@@ -69,20 +71,186 @@ type SyncOperation struct {
 // SyncConflict retains both snapshots so conflict resolution never destroys
 // evidence. Phase 1 uses the manual policy until a resolver is implemented.
 type SyncConflict struct {
-	BackendID      int
-	EntityID       *int
-	TaskID         *int
-	LocalSnapshot  string
-	RemoteSnapshot string
-	Policy         string
-	Status         string
-	Resolution     string
+	ID             int        `json:"id"`
+	BackendID      int        `json:"backend_id"`
+	EntityID       *int       `json:"entity_id,omitempty"`
+	TaskID         *int       `json:"task_id,omitempty"`
+	LocalSnapshot  string     `json:"local_snapshot"`
+	RemoteSnapshot string     `json:"remote_snapshot"`
+	Policy         string     `json:"policy"`
+	Status         string     `json:"status"`
+	Resolution     string     `json:"resolution,omitempty"`
+	CreatedAt      *time.Time `json:"created_at,omitempty"`
+	ResolvedAt     *time.Time `json:"resolved_at,omitempty"`
 }
 
 // SyncRepository persists synchronization state.
 type SyncRepository struct{ db *sql.DB }
 
 func NewSyncRepository(db *sql.DB) *SyncRepository { return &SyncRepository{db: db} }
+
+// ListConflicts returns retained conflict evidence for backends owned by a
+// user. An empty status lists every conflict; callers normally request
+// "open" to drive the recovery UI.
+func (r *SyncRepository) ListConflicts(ctx context.Context, userID int, status string, backendID int) ([]SyncConflict, error) {
+	if userID <= 0 {
+		return nil, fmt.Errorf("user ID must be positive")
+	}
+	query := `SELECT c.id,c.backend_id,c.entity_id,c.task_id,c.local_snapshot,c.remote_snapshot,c.policy,c.status,c.resolution,c.created_at,c.resolved_at
+		FROM sync_conflicts c JOIN backends b ON b.id=c.backend_id WHERE b.user_id=?`
+	args := []any{userID}
+	if status != "" {
+		query += " AND c.status=?"
+		args = append(args, status)
+	}
+	if backendID > 0 {
+		query += " AND c.backend_id=?"
+		args = append(args, backendID)
+	}
+	query += " ORDER BY c.id"
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list sync conflicts: %w", err)
+	}
+	defer rows.Close()
+	var conflicts []SyncConflict
+	for rows.Next() {
+		conflict, err := scanSyncConflict(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan sync conflict: %w", err)
+		}
+		conflicts = append(conflicts, conflict)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate sync conflicts: %w", err)
+	}
+	return conflicts, nil
+}
+
+// GetConflict returns one conflict only when its backend belongs to userID.
+func (r *SyncRepository) GetConflict(ctx context.Context, userID, conflictID int) (*SyncConflict, error) {
+	if userID <= 0 || conflictID <= 0 {
+		return nil, ErrNotFound
+	}
+	row := r.db.QueryRowContext(ctx, `SELECT c.id,c.backend_id,c.entity_id,c.task_id,c.local_snapshot,c.remote_snapshot,c.policy,c.status,c.resolution,c.created_at,c.resolved_at
+		FROM sync_conflicts c JOIN backends b ON b.id=c.backend_id WHERE c.id=? AND b.user_id=?`, conflictID, userID)
+	conflict, err := scanSyncConflict(row)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get sync conflict: %w", err)
+	}
+	return &conflict, nil
+}
+
+// ResolveConflict closes a retained conflict while preserving both snapshots.
+// Choosing remote applies the retained provider snapshot to the canonical task
+// in the same transaction as resolution. Choosing local leaves the local task
+// untouched so the next sync can push it. Dismissed is an explicit recovery
+// acknowledgement that does not choose either version.
+func (r *SyncRepository) ResolveConflict(ctx context.Context, userID, conflictID int, resolution string) (*SyncConflict, error) {
+	if resolution != "local" && resolution != "remote" && resolution != "dismissed" {
+		return nil, fmt.Errorf("%w: resolution must be local, remote, or dismissed", ErrInvalidConflictResolution)
+	}
+	if userID <= 0 || conflictID <= 0 {
+		return nil, ErrNotFound
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin conflict resolution transaction: %w", err)
+	}
+	defer tx.Rollback()
+	row := tx.QueryRowContext(ctx, `SELECT c.id,c.backend_id,c.entity_id,c.task_id,c.local_snapshot,c.remote_snapshot,c.policy,c.status,c.resolution,c.created_at,c.resolved_at
+		FROM sync_conflicts c JOIN backends b ON b.id=c.backend_id WHERE c.id=? AND b.user_id=?`, conflictID, userID)
+	conflict, err := scanSyncConflict(row)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load sync conflict: %w", err)
+	}
+	if conflict.Status != "open" {
+		return nil, fmt.Errorf("%w: conflict %d is already %s", ErrConflictAlreadyResolved, conflict.ID, conflict.Status)
+	}
+	now := time.Now().UTC()
+	if resolution == "remote" {
+		if conflict.TaskID == nil {
+			return nil, ErrConflictNoTask
+		}
+		var task models.Task
+		if err := json.Unmarshal([]byte(conflict.RemoteSnapshot), &task); err != nil {
+			return nil, fmt.Errorf("%w: decode remote snapshot: %v", ErrInvalidConflictSnapshot, err)
+		}
+		task.ID = *conflict.TaskID
+		task.BackendID = conflict.BackendID
+		if task.Title == "" || task.UID == "" {
+			return nil, fmt.Errorf("%w: remote snapshot is missing task identity", ErrInvalidConflictSnapshot)
+		}
+		if err := updateTask(ctx, tx, &task, now); err != nil {
+			return nil, fmt.Errorf("apply remote conflict resolution: %w", err)
+		}
+		// The snapshot does not contain provider transport metadata. Clearing
+		// the stale ETag makes the next pull compare canonical task content,
+		// avoiding an immediate duplicate conflict while retaining mapping data.
+		if conflict.EntityID != nil {
+			if _, err := tx.ExecContext(ctx, `UPDATE sync_entities SET remote_etag='',last_pulled_at=?,state='active',deleted_at=NULL,updated_at=? WHERE id=? AND backend_id=?`, now, now, *conflict.EntityID, conflict.BackendID); err != nil {
+				return nil, fmt.Errorf("refresh resolved sync mapping: %w", err)
+			}
+		}
+	}
+	status := "resolved"
+	if resolution == "dismissed" {
+		status = "dismissed"
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE sync_conflicts SET status=?,resolution=?,resolved_at=? WHERE id=? AND backend_id=?`, status, resolution, now, conflict.ID, conflict.BackendID); err != nil {
+		return nil, fmt.Errorf("mark sync conflict resolved: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit conflict resolution: %w", err)
+	}
+	conflict.Status, conflict.Resolution, conflict.ResolvedAt = status, resolution, &now
+	return &conflict, nil
+}
+
+type syncConflictScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanSyncConflict(scanner syncConflictScanner) (SyncConflict, error) {
+	var conflict SyncConflict
+	var entityID, taskID sql.NullInt64
+	var resolution sql.NullString
+	var createdAt, resolvedAt sql.NullString
+	if err := scanner.Scan(&conflict.ID, &conflict.BackendID, &entityID, &taskID, &conflict.LocalSnapshot, &conflict.RemoteSnapshot, &conflict.Policy, &conflict.Status, &resolution, &createdAt, &resolvedAt); err != nil {
+		return SyncConflict{}, err
+	}
+	if entityID.Valid {
+		value := int(entityID.Int64)
+		conflict.EntityID = &value
+	}
+	if taskID.Valid {
+		value := int(taskID.Int64)
+		conflict.TaskID = &value
+	}
+	if resolution.Valid {
+		conflict.Resolution = resolution.String
+	}
+	for _, item := range []struct {
+		value  sql.NullString
+		target **time.Time
+		name   string
+	}{{createdAt, &conflict.CreatedAt, "created_at"}, {resolvedAt, &conflict.ResolvedAt, "resolved_at"}} {
+		if item.value.Valid {
+			parsed, err := parseTimestamp(item.value.String)
+			if err != nil {
+				return SyncConflict{}, fmt.Errorf("parse sync conflict %s: %w", item.name, err)
+			}
+			*item.target = &parsed
+		}
+	}
+	return conflict, nil
+}
 
 // ListEntities returns the durable provider mappings used as the baseline for
 // reconciliation. A missing baseline is represented by nil timestamps rather

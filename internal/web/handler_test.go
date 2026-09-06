@@ -353,6 +353,49 @@ func TestUpdateStatusPersistence(t *testing.T) {
 	}
 }
 
+func TestSyncConflictRecoveryAPIListsAndResolvesOwnedConflict(t *testing.T) {
+	database := setupTestDB(t)
+	defer database.Close()
+	if _, err := database.Exec("INSERT INTO tasks(id,backend_id,uid,title,status,dtstamp,created_at) VALUES(1,1,'task-1','Local title','NEEDS-ACTION',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"); err != nil {
+		t.Fatal(err)
+	}
+	remote := models.Task{ID: 1, BackendID: 1, UID: "task-1", Title: "Remote title", Status: models.StatusInProcess}
+	remoteSnapshot, err := json.Marshal(remote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`INSERT INTO sync_entities(id,backend_id,task_id,remote_uid,state) VALUES(1,1,1,'task-1','active')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.Exec(`INSERT INTO sync_conflicts(backend_id,entity_id,task_id,local_snapshot,remote_snapshot,policy,status) VALUES(1,1,1,'{"title":"Local title"}',?,'manual','open')`, string(remoteSnapshot)); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewHandler(db.NewTaskRepository(database))
+	handler.SetSyncRepository(db.NewSyncRepository(database))
+	list := httptest.NewRecorder()
+	handler.HandleSyncConflicts(list, httptest.NewRequest(http.MethodGet, "/api/sync/conflicts?status=open", nil))
+	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), "Remote title") {
+		t.Fatalf("list returned %d: %s", list.Code, list.Body.String())
+	}
+	resolve := httptest.NewRecorder()
+	handler.HandleSyncConflicts(resolve, httptest.NewRequest(http.MethodPatch, "/api/sync/conflicts/1", strings.NewReader(`{"resolution":"remote"}`)))
+	if resolve.Code != http.StatusOK || !strings.Contains(resolve.Body.String(), `"status":"resolved"`) {
+		t.Fatalf("resolve returned %d: %s", resolve.Code, resolve.Body.String())
+	}
+	task, err := db.NewTaskRepository(database).Get(1)
+	if err != nil || task == nil || task.Title != "Remote title" || task.Status != models.StatusInProcess {
+		t.Fatalf("remote resolution not reflected in task: %#v err=%v", task, err)
+	}
+	for _, method := range []string{http.MethodGet, http.MethodPatch} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(method, "/api/sync/conflicts/999", strings.NewReader(`{"resolution":"local"}`))
+		handler.HandleSyncConflicts(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("missing conflict %s returned %d", method, rec.Code)
+		}
+	}
+}
+
 func TestMain(m *testing.M) {
 	// Run tests
 	code := m.Run()
