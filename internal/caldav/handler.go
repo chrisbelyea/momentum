@@ -6,7 +6,9 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -37,6 +39,8 @@ func (h *Handler) HandleTasks(w http.ResponseWriter, r *http.Request) {
 		h.optionsCollection(w)
 	case "PROPFIND":
 		h.propfindTasks(w, r)
+	case "REPORT":
+		h.reportTasks(w, r)
 	case http.MethodGet:
 		h.listTasks(w, r)
 	case http.MethodPost:
@@ -108,7 +112,7 @@ func (h *Handler) listTasks(w http.ResponseWriter, r *http.Request) {
 // task collection and its resources. It is intentionally explicit so clients
 // do not infer support for REPORT, MKCALENDAR, or other unimplemented methods.
 func (h *Handler) optionsCollection(w http.ResponseWriter) {
-	w.Header().Set("Allow", "OPTIONS, GET, POST, PROPFIND")
+	w.Header().Set("Allow", "OPTIONS, GET, POST, PROPFIND, REPORT")
 	w.Header().Set("DAV", "1, calendar-access")
 	w.Header().Set("MS-Author-Via", "DAV")
 	w.WriteHeader(http.StatusOK)
@@ -144,6 +148,7 @@ type propfindProperties struct {
 	GetETag            string                `xml:"D:getetag,omitempty"`
 	GetContentType     string                `xml:"D:getcontenttype,omitempty"`
 	SupportedComponent *supportedComponents  `xml:"C:supported-calendar-component-set,omitempty"`
+	CalendarData       string                `xml:"C:calendar-data,omitempty"`
 }
 
 type propfindResourceType struct {
@@ -203,6 +208,121 @@ func (h *Handler) propfindTasks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
 	_ = xml.NewEncoder(w).Encode(propfindMultistatus{XMLNSD: "DAV:", XMLNSC: "urn:ietf:params:xml:ns:caldav", Responses: responses})
+}
+
+// reportRequest is the common subset of the CalDAV calendar-query and
+// calendar-multiget REPORT bodies. A calendar-query has no hrefs; a
+// calendar-multiget supplies one or more resource hrefs.
+type reportRequest struct {
+	XMLName xml.Name
+	Hrefs   []string `xml:"href"`
+}
+
+// reportTasks implements the read-only CalDAV REPORTs needed by clients to
+// enumerate and fetch VTODO resources. It deliberately supports only the
+// calendar-query and calendar-multiget report shapes; unsupported filters are
+// rejected instead of being silently ignored.
+func (h *Handler) reportTasks(w http.ResponseWriter, r *http.Request) {
+	var request reportRequest
+	decoder := xml.NewDecoder(io.LimitReader(r.Body, 2<<20))
+	if err := decoder.Decode(&request); err != nil {
+		http.Error(w, "invalid REPORT body", http.StatusBadRequest)
+		return
+	}
+	if request.XMLName.Local != "calendar-query" && request.XMLName.Local != "calendar-multiget" {
+		http.Error(w, "unsupported REPORT type", http.StatusBadRequest)
+		return
+	}
+	if request.XMLName.Local == "calendar-query" && len(request.Hrefs) != 0 {
+		http.Error(w, "calendar-query must not contain hrefs", http.StatusBadRequest)
+		return
+	}
+	if request.XMLName.Local == "calendar-multiget" && len(request.Hrefs) == 0 {
+		http.Error(w, "calendar-multiget requires hrefs", http.StatusBadRequest)
+		return
+	}
+
+	userID, ok := auth.UserIDFromRequest(r)
+	if !ok {
+		userID = 1
+	}
+	backendID, err := backendIDForRequest(h.taskRepo, r.URL.Query().Get("backend_id"), userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var tasks []*models.Task
+	if request.XMLName.Local == "calendar-query" {
+		tasks, err = h.taskRepo.ListForUser(backendID, userID)
+	} else {
+		tasks = make([]*models.Task, 0, len(request.Hrefs))
+		for _, href := range request.Hrefs {
+			id, parseErr := taskIDFromHref(href)
+			if parseErr != nil {
+				tasks = append(tasks, nil)
+				continue
+			}
+			task, getErr := h.taskRepo.GetForUser(id, userID)
+			if getErr != nil {
+				http.Error(w, fmt.Sprintf("failed to fetch task: %v", getErr), http.StatusInternalServerError)
+				return
+			}
+			if task == nil || task.BackendID != backendID {
+				tasks = append(tasks, nil)
+				continue
+			}
+			tasks = append(tasks, task)
+		}
+	}
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to list tasks: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	responses := make([]propfindResponse, 0, len(tasks))
+	for i, task := range tasks {
+		if task == nil {
+			href := ""
+			if i < len(request.Hrefs) {
+				href = request.Hrefs[i]
+			}
+			responses = append(responses, propfindResponse{Href: href, Propstat: propfindPropstat{Status: "HTTP/1.1 404 Not Found"}})
+			continue
+		}
+		data, marshalErr := todoFromTask(task).Marshal()
+		if marshalErr != nil {
+			http.Error(w, fmt.Sprintf("failed to serialize task: %v", marshalErr), http.StatusInternalServerError)
+			return
+		}
+		responses = append(responses, propfindResponse{
+			Href: fmt.Sprintf("/caldav/tasks/%d", task.ID),
+			Propstat: propfindPropstat{Status: "HTTP/1.1 200 OK", Prop: propfindProperties{
+				GetETag: taskETag(task), GetContentType: "text/calendar; component=VTODO",
+				CalendarData: string(data),
+			}},
+		})
+	}
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.WriteHeader(http.StatusMultiStatus)
+	_ = xml.NewEncoder(w).Encode(propfindMultistatus{XMLNSD: "DAV:", XMLNSC: "urn:ietf:params:xml:ns:caldav", Responses: responses})
+}
+
+func taskIDFromHref(href string) (int, error) {
+	path := href
+	if parsed, err := url.Parse(href); err == nil {
+		path = parsed.Path
+	}
+	path = strings.TrimSuffix(path, "/")
+	const prefix = "/caldav/tasks/"
+	if !strings.HasPrefix(path, prefix) {
+		return 0, fmt.Errorf("href is not a task resource")
+	}
+	id, err := strconv.Atoi(strings.TrimPrefix(path, prefix))
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("href does not identify a task")
+	}
+	return id, nil
 }
 
 func backendIDForRequest(repo *db.TaskRepository, raw string, userID int) (int, error) {
