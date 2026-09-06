@@ -30,8 +30,6 @@ Visit the [Releases page](https://github.com/chrisbelyea/momentum/releases) and 
 |----------|---------|
 | Linux x86-64 | `momentum-server-linux-amd64.tar.gz` |
 | Linux ARM64 | `momentum-server-linux-arm64.tar.gz` |
-| macOS Apple Silicon | `momentum-server-darwin-arm64.tar.gz` |
-| macOS Intel | `momentum-server-darwin-amd64.tar.gz` |
 | Windows x86-64 | `momentum-server-windows-amd64.zip` |
 
 Each release also includes a `checksums.txt` file containing SHA-256 checksums for all archives.
@@ -84,8 +82,8 @@ The release pipeline is defined in [`.github/workflows/release.yml`](../.github/
 |--------|-------|
 | Trigger | Push to a `v*` tag |
 | Build tool | [GoReleaser](https://goreleaser.com/) inside the [`goreleaser-cross`](https://github.com/goreleaser/goreleaser-cross) Docker image |
-| Cross-compilation | Linux ARM64 via `aarch64-linux-gnu-gcc`; Windows via MinGW-w64; macOS via osxcross |
-| Archive format | `.tar.gz` (Linux/macOS), `.zip` (Windows) |
+| Cross-compilation | Linux ARM64 via `aarch64-linux-gnu-gcc`; Windows via MinGW-w64 |
+| Archive format | `.tar.gz` (Linux), `.zip` (Windows) |
 | Checksum | SHA-256, collected in `checksums.txt` |
 | Release notes | Auto-generated from commit history |
 
@@ -146,8 +144,6 @@ Set `GOOS` and `GOARCH` before running the script. Because `go-sqlite3` uses CGO
 |--------|--------|----------|----------------------|
 | Linux x86-64 | `linux` | `amd64` | `gcc` (native) |
 | Linux ARM64 | `linux` | `arm64` | `aarch64-linux-gnu-gcc` |
-| macOS (Apple Silicon) | `darwin` | `arm64` | Xcode on macOS |
-| macOS (Intel) | `darwin` | `amd64` | Xcode on macOS |
 | Windows x86-64 | `windows` | `amd64` | `x86_64-w64-mingw32-gcc` |
 
 Example (Linux cross-compile to ARM64):

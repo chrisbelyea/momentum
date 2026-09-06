@@ -29,7 +29,6 @@ builds:
       - CGO_ENABLED=1
     goos:
       - linux
-      - darwin
       - windows
     goarch:
       - amd64
@@ -53,20 +52,6 @@ builds:
           - CGO_ENABLED=1
           - CC=aarch64-linux-gnu-gcc
           - CXX=aarch64-linux-gnu-g++
-      # macOS Intel: use osxcross o64-clang provided by goreleaser-cross
-      - goos: darwin
-        goarch: amd64
-        env:
-          - CGO_ENABLED=1
-          - CC=o64-clang
-          - CXX=o64-clang++
-      # macOS Apple Silicon: use osxcross oa64-clang provided by goreleaser-cross
-      - goos: darwin
-        goarch: arm64
-        env:
-          - CGO_ENABLED=1
-          - CC=oa64-clang
-          - CXX=oa64-clang++
       # Windows x86-64: use MinGW-w64 cross-compiler
       - goos: windows
         goarch: amd64
