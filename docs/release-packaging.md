@@ -225,11 +225,15 @@ Set-ExecutionPolicy -Scope Process Bypass
 The installer uses `%LOCALAPPDATA%\Momentum` for the executable and
 `%APPDATA%\Momentum\momentum.db` for data. To register an automatic Windows
 service, rerun from an elevated PowerShell prompt with
-`-RegisterService`; it refuses to replace an existing service implicitly.
+`-RegisterService -EncryptionKey '<strong-random-key>'`; it refuses to replace
+an existing service implicitly. The installer stores the per-service database
+path, service name, and production encryption key in the SCM service
+environment. Never use `MOMENTUM_DEV_MODE=1` for a service exposed beyond local
+development.
 
-The service and launcher both listen on port 8080 by default. The service
-uses the binary's OS-specific default database path; use the launcher when a
-custom `PORT` or `DB_PATH` is required.
+The service and launcher both listen on port 8080 by default. The service uses
+the installer-selected data directory; use the launcher when a custom `PORT`
+or `DB_PATH` is required.
 
 #### First run, upgrades, and backups
 
