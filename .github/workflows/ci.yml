@@ -30,6 +30,24 @@ jobs:
       - run: go test -race ./...
       - run: go build -o bin/momentum-server ./cmd/server
 
+  caldav-radicale-interop:
+    name: CalDAV interoperability (Radicale)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install pinned standards-focused CalDAV server
+        run: python -m pip install --disable-pip-version-check 'radicale==3.1.8'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go mod download
+      - name: Run authenticated VTODO lifecycle against Radicale
+        run: scripts/caldav/radicale-interop.sh
+
   windows-service:
     name: Windows service lifecycle
     runs-on: windows-latest
