@@ -29,6 +29,15 @@ import (
 var version = "dev"
 
 func main() {
+	if err := runAsPlatform(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// runServer contains the application lifecycle shared by interactive and
+// Windows-service launches. A nil stop channel installs the normal console
+// signal handlers; the Windows service adapter supplies its own stop channel.
+func runServer(stop <-chan os.Signal) {
 	// Get configuration from environment
 	dbPath, err := config.DatabasePath()
 	if err != nil {
@@ -231,14 +240,17 @@ func main() {
 	}
 	serverErr := make(chan error, 1)
 	go func() { serverErr <- server.ListenAndServeTLS(tlsCert, tlsKey) }()
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	if stop == nil {
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+		stop = signals
+	}
 	select {
 	case err := <-serverErr:
 		if err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed to start: %v", err)
 		}
-	case <-signals:
+	case <-stop:
 		log.Println("Shutdown signal received; stopping Momentum gracefully")
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
