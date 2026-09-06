@@ -62,7 +62,8 @@ builds:
 
 archives:
   - id: default
-    # tar.gz for Linux/macOS; zip for Windows
+    # tar.gz for Linux (macOS archives are built natively in the release
+    # workflow); zip for Windows
     formats:
       - tar.gz
     name_template: "{{ .ProjectName }}-server-{{ .Os }}-{{ .Arch }}"

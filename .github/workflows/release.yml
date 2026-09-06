@@ -22,9 +22,90 @@ jobs:
           docker run --rm -v "${GITHUB_WORKSPACE}:/workspace" -w /workspace \
             -e GITHUB_TOKEN ghcr.io/goreleaser/goreleaser-cross:v1.25.8 release --clean
 
+  # goreleaser-cross cannot currently produce a runnable macOS binary: its
+  # bundled linker emits a Mach-O image rejected by current macOS runners
+  # (dyld: __DATA_CONST segment missing SG_READ_ONLY flag). Build each macOS
+  # architecture on its native GitHub-hosted runner instead. The archive is
+  # attached to the draft created above before any platform validation runs.
+  macos-native:
+    name: Build macOS ${{ matrix.arch }} artifact (native)
+    needs: goreleaser
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-15-intel, arch: amd64, machine: x86_64 }
+          - { runner: macos-14, arch: arm64, machine: arm64 }
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Assert native runner architecture
+        run: test "$(uname -m)" = "${{ matrix.machine }}"
+      - name: Build native macOS server archive
+        env:
+          GOOS: darwin
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: '1'
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          ./scripts/release/build-server.sh
+          archive="momentum-server-darwin-${GOARCH}.tar.gz"
+          staging="$(mktemp -d)/momentum"
+          mkdir -p "${staging}/scripts"
+          cp dist/server/momentum-server "${staging}/"
+          cp -R scripts/packaging "${staging}/scripts/"
+          cp LICENSE docs/release-packaging.md "${staging}/"
+          tar -czf "${archive}" -C "${staging}" .
+          shasum -a 256 "${archive}" > "${archive}.sha256"
+          mkdir -p macos-assets
+          mv "${archive}" "${archive}.sha256" macos-assets/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: macos-assets/
+          if-no-files-found: error
+
+  macos-attach:
+    name: Attach native macOS artifacts
+    needs: macos-native
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: macos-*
+          path: macos-assets
+          merge-multiple: true
+      - name: Attach macOS archives and extend checksums
+        env:
+          GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+        run: |
+          set -euo pipefail
+          test -f macos-assets/momentum-server-darwin-amd64.tar.gz
+          test -f macos-assets/momentum-server-darwin-arm64.tar.gz
+          gh release upload "${GITHUB_REF_NAME}" \
+            macos-assets/momentum-server-darwin-amd64.tar.gz \
+            macos-assets/momentum-server-darwin-arm64.tar.gz \
+            --repo "${GITHUB_REPOSITORY}" --clobber
+          gh release download "${GITHUB_REF_NAME}" \
+            --pattern checksums.txt --dir macos-assets \
+            --repo "${GITHUB_REPOSITORY}"
+          cat macos-assets/momentum-server-darwin-amd64.tar.gz.sha256 \
+            macos-assets/momentum-server-darwin-arm64.tar.gz.sha256 \
+            >> macos-assets/checksums.txt
+          gh release upload "${GITHUB_REF_NAME}" macos-assets/checksums.txt \
+            --repo "${GITHUB_REPOSITORY}" --clobber
+
   smoke-test:
     name: Smoke test (${{ matrix.os }})
-    needs: goreleaser
+    needs: [goreleaser, macos-attach]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -32,6 +113,8 @@ jobs:
         include:
           - { os: ubuntu-latest, artifact: momentum-server-linux-amd64.tar.gz }
           - { os: windows-latest, artifact: momentum-server-windows-amd64.zip }
+          - { os: macos-15-intel, artifact: momentum-server-darwin-amd64.tar.gz }
+          - { os: macos-14, artifact: momentum-server-darwin-arm64.tar.gz }
     steps:
       - uses: actions/checkout@v4
       - name: Download release artifact
@@ -77,6 +160,8 @@ jobs:
         include:
           - { os: ubuntu-latest, artifact: momentum-server-linux-amd64.tar.gz, binary: momentum-server }
           - { os: windows-latest, artifact: momentum-server-windows-amd64.zip, binary: momentum-server.exe }
+          - { os: macos-15-intel, artifact: momentum-server-darwin-amd64.tar.gz, binary: momentum-server }
+          - { os: macos-14, artifact: momentum-server-darwin-arm64.tar.gz, binary: momentum-server }
     steps:
       - uses: actions/checkout@v4
       - name: Download platform release artifact
@@ -96,7 +181,7 @@ jobs:
 
   verify-arm64-artifact:
     name: Verify Linux ARM64 artifact
-    needs: goreleaser
+    needs: [goreleaser, macos-attach]
     runs-on: ubuntu-latest
     steps:
       - name: Download Linux ARM64 artifact
