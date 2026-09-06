@@ -65,22 +65,46 @@ jobs:
           echo 'health endpoint did not become ready'; exit 1
 
   integration-test:
-    name: Release workflow integration (Linux)
+    name: Release workflow integration (${{ matrix.os }})
     needs: smoke-test
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, artifact: momentum-server-linux-amd64.tar.gz, binary: momentum-server }
+          - { os: windows-latest, artifact: momentum-server-windows-amd64.zip, binary: momentum-server.exe }
     steps:
       - uses: actions/checkout@v4
-      - name: Download Linux release artifact
+      - name: Download platform release artifact
         env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
-        run: gh release download "${{ github.ref_name }}" --pattern 'momentum-server-linux-amd64.tar.gz' --repo "${{ github.repository }}"
-      - run: tar -xzf momentum-server-linux-amd64.tar.gz
+        run: gh release download "${{ github.ref_name }}" --pattern "${{ matrix.artifact }}" --repo "${{ github.repository }}"
+      - name: Extract Linux archive
+        if: runner.os != 'Windows'
+        run: tar -xzf "${{ matrix.artifact }}"
+      - name: Extract Windows archive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Expand-Archive -Path "${{ matrix.artifact }}" -DestinationPath . -Force
       - run: chmod +x scripts/release/integration-test.sh
       - name: Run complete fresh-database workflow
-        run: scripts/release/integration-test.sh "$(find . -type f -name momentum-server -print -quit)"
+        shell: bash
+        run: scripts/release/integration-test.sh "$(find . -type f -name '${{ matrix.binary }}' -print -quit)"
+
+  verify-arm64-artifact:
+    name: Verify Linux ARM64 artifact
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Linux ARM64 artifact
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: gh release download "${{ github.ref_name }}" --pattern 'momentum-server-linux-arm64.tar.gz' --repo "${{ github.repository }}"
+      - name: Validate archive contains the executable
+        run: tar -tzf momentum-server-linux-arm64.tar.gz | grep -Eq '(^|/)momentum-server$'
 
   publish:
     name: Publish release
-    needs: integration-test
+    needs: [integration-test, verify-arm64-artifact]
     runs-on: ubuntu-latest
     steps:
       - name: Publish only after all validation
