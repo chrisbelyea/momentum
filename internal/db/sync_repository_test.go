@@ -44,6 +44,14 @@ func TestSyncRepositoryApplyBatchIsTransactionalAndResumable(t *testing.T) {
 	if entities != 1 || operations != 1 || conflicts != 1 {
 		t.Fatalf("state counts: entities=%d operations=%d conflicts=%d", entities, operations, conflicts)
 	}
+	rows, err := repo.ListEntities(context.Background(), 2)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("list entities: err=%v rows=%d", err, len(rows))
+	}
+	mapping := rows[0].Mapping()
+	if mapping.RemoteUID != "remote-2" || mapping.TaskID == nil || *mapping.TaskID != 2 || mapping.RemoteETag != "etag" {
+		t.Fatalf("unexpected mapping: %#v", mapping)
+	}
 	// Invalid records must roll back all writes, including the checkpoint.
 	err = repo.ApplyBatch(context.Background(), SyncCheckpoint{BackendID: 2, Cursor: "bad", Status: "failed"}, nil, []SyncOperation{{BackendID: 999, Direction: "pull", Operation: "pull", Outcome: "failed"}}, nil)
 	if err == nil {
