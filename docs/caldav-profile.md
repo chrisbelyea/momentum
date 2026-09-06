@@ -69,8 +69,15 @@ collection request URI, rather than the configured discovery root. This is a
 wire-compatibility behavior and is intentionally covered by the strict
 profile.
 
-These are deterministic protocol fixtures, not live-provider certification.
-They do not prove compatibility with Google, Apple, Nextcloud, Radicale, or
-any other named service. A real-provider run of this matrix, including
-provider-specific authentication and discovery behavior, remains required by
-issue #67 before claiming hosted-provider interoperability complete.
+CI additionally runs `scripts/caldav/radicale-interop.sh`, which starts the
+pinned Radicale 3.1.8 standards-focused server with TLS and Basic
+authentication, creates a VTODO collection, and runs
+`TestLiveCalDAVInterop` through the real outbound client. That check proves
+the documented profile against Radicale's implementation, while remaining
+reproducible and credential-free.
+
+The local matrix and Radicale run do not constitute hosted-provider
+certification. They do not prove compatibility with Google, Apple, Nextcloud,
+or any other named service. A real-provider run, including provider-specific
+authentication and discovery behavior, remains required by issue #67 before
+claiming hosted-provider interoperability complete.
