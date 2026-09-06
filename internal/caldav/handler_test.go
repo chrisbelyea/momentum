@@ -8,10 +8,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/chrisbelyea/momentum/internal/db"
 	"github.com/chrisbelyea/momentum/internal/models"
+	"github.com/chrisbelyea/momentum/pkg/vtodo"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -32,6 +34,57 @@ func setupTestDB(t *testing.T) *sql.DB {
 	database.Exec("INSERT INTO backends (id, user_id, backend_type, name) VALUES (1, 1, 'internal', 'Test Backend')")
 
 	return database
+}
+
+func TestICalendarTaskWorkflowAndConditionalRequests(t *testing.T) {
+	database := setupTestDB(t)
+	defer database.Close()
+	handler := NewHandler(db.NewTaskRepository(database))
+	body := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTODO\r\nUID:ical-1@example.test\r\nDTSTAMP:20260905T120000Z\r\nSUMMARY:Calendar task\r\nSTATUS:NEEDS-ACTION\r\nEND:VTODO\r\nEND:VCALENDAR\r\n"
+	req := httptest.NewRequest(http.MethodPost, "/caldav/tasks?backend_id=1", strings.NewReader(body))
+	req.Header.Set("Content-Type", "text/calendar")
+	rec := httptest.NewRecorder()
+	handler.HandleTasks(rec, req)
+	if rec.Code != http.StatusCreated || rec.Header().Get("Location") == "" || rec.Header().Get("ETag") == "" {
+		t.Fatalf("calendar create: status=%d headers=%v body=%s", rec.Code, rec.Header(), rec.Body.String())
+	}
+	task, err := vtodo.Parse(rec.Body.Bytes())
+	if err != nil || task.Summary != "Calendar task" {
+		t.Fatalf("calendar response: %v %#v", err, task)
+	}
+	id := strings.TrimPrefix(rec.Header().Get("Location"), "/caldav/tasks/")
+	get := httptest.NewRequest(http.MethodGet, "/caldav/tasks/"+id, nil)
+	get.Header.Set("Accept", "text/calendar")
+	getRec := httptest.NewRecorder()
+	handler.HandleTask(getRec, get)
+	if getRec.Code != http.StatusOK || getRec.Header().Get("Content-Type") != "text/calendar; charset=utf-8" {
+		t.Fatalf("calendar get: %d %s", getRec.Code, getRec.Body.String())
+	}
+	etag := getRec.Header().Get("ETag")
+	conditional := httptest.NewRequest(http.MethodGet, "/caldav/tasks/"+id, nil)
+	conditional.Header.Set("Accept", "text/calendar")
+	conditional.Header.Set("If-None-Match", etag)
+	conditionalRec := httptest.NewRecorder()
+	handler.HandleTask(conditionalRec, conditional)
+	if conditionalRec.Code != http.StatusNotModified {
+		t.Fatalf("expected 304, got %d", conditionalRec.Code)
+	}
+	updated := strings.Replace(body, "Calendar task", "Updated calendar task", 1)
+	put := httptest.NewRequest(http.MethodPut, "/caldav/tasks/"+id, strings.NewReader(updated))
+	put.Header.Set("Content-Type", "text/calendar")
+	put.Header.Set("If-Match", etag)
+	putRec := httptest.NewRecorder()
+	handler.HandleTask(putRec, put)
+	if putRec.Code != http.StatusOK || !strings.Contains(putRec.Body.String(), "Updated calendar task") {
+		t.Fatalf("calendar put: %d %s", putRec.Code, putRec.Body.String())
+	}
+	del := httptest.NewRequest(http.MethodDelete, "/caldav/tasks/"+id, nil)
+	del.Header.Set("If-Match", putRec.Header().Get("ETag"))
+	delRec := httptest.NewRecorder()
+	handler.HandleTask(delRec, del)
+	if delRec.Code != http.StatusNoContent {
+		t.Fatalf("calendar delete: %d", delRec.Code)
+	}
 }
 
 func TestCreateTask(t *testing.T) {

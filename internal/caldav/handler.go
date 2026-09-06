@@ -11,6 +11,7 @@ import (
 	"github.com/chrisbelyea/momentum/internal/auth"
 	"github.com/chrisbelyea/momentum/internal/db"
 	"github.com/chrisbelyea/momentum/internal/models"
+	"github.com/chrisbelyea/momentum/pkg/vtodo"
 )
 
 // Handler handles CalDAV HTTP requests
@@ -114,6 +115,10 @@ func (h *Handler) getTask(w http.ResponseWriter, r *http.Request, taskID int) {
 		http.Error(w, "Task not found", http.StatusNotFound)
 		return
 	}
+	if wantsCalendar(r) {
+		h.writeCalendarTask(w, r, task)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(task)
@@ -126,7 +131,20 @@ func (h *Handler) createTask(w http.ResponseWriter, r *http.Request) {
 		userID = 1
 	}
 	var task models.Task
-	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+	if isCalendarRequest(r) {
+		todo, err := vtodo.Parse(readBody(r))
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Invalid iCalendar: %v", err), http.StatusBadRequest)
+			return
+		}
+		task = taskFromTodo(todo)
+		backendID, err := strconv.Atoi(r.URL.Query().Get("backend_id"))
+		if err != nil || backendID == 0 {
+			http.Error(w, "backend_id query parameter is required", http.StatusBadRequest)
+			return
+		}
+		task.BackendID = backendID
+	} else if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 		return
 	}
@@ -154,6 +172,15 @@ func (h *Handler) createTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	if isCalendarRequest(r) {
+		w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
+		w.Header().Set("Location", fmt.Sprintf("/caldav/tasks/%d", task.ID))
+		w.Header().Set("ETag", taskETag(&task))
+		data, _ := todoFromTask(&task).Marshal()
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write(data)
+		return
+	}
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(task)
 }
@@ -164,8 +191,25 @@ func (h *Handler) updateTask(w http.ResponseWriter, r *http.Request, taskID int)
 	if !ok {
 		userID = 1
 	}
+	old, err := h.taskRepo.GetForUser(taskID, userID)
+	if err != nil || old == nil {
+		http.Error(w, "Task not found", http.StatusNotFound)
+		return
+	}
+	if match := r.Header.Get("If-Match"); match != "" && match != taskETag(old) {
+		http.Error(w, "ETag does not match", http.StatusPreconditionFailed)
+		return
+	}
 	var task models.Task
-	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+	if isCalendarRequest(r) {
+		todo, parseErr := vtodo.Parse(readBody(r))
+		if parseErr != nil {
+			http.Error(w, fmt.Sprintf("Invalid iCalendar: %v", parseErr), http.StatusBadRequest)
+			return
+		}
+		task = taskFromTodo(todo)
+		task.BackendID = old.BackendID
+	} else if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 		return
 	}
@@ -197,6 +241,13 @@ func (h *Handler) updateTask(w http.ResponseWriter, r *http.Request, taskID int)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	if isCalendarRequest(r) {
+		w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
+		w.Header().Set("ETag", taskETag(&task))
+		data, _ := todoFromTask(&task).Marshal()
+		_, _ = w.Write(data)
+		return
+	}
 	json.NewEncoder(w).Encode(task)
 }
 
@@ -205,6 +256,13 @@ func (h *Handler) deleteTask(w http.ResponseWriter, r *http.Request, taskID int)
 	userID, ok := auth.UserIDFromRequest(r)
 	if !ok {
 		userID = 1
+	}
+	if current, err := h.taskRepo.GetForUser(taskID, userID); err != nil || current == nil {
+		http.Error(w, "Task not found", http.StatusNotFound)
+		return
+	} else if match := r.Header.Get("If-Match"); match != "" && match != taskETag(current) {
+		http.Error(w, "ETag does not match", http.StatusPreconditionFailed)
+		return
 	}
 	if err := h.taskRepo.DeleteForUser(taskID, userID); err != nil {
 		if errors.Is(err, db.ErrNotFound) {
