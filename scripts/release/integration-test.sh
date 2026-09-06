@@ -148,6 +148,17 @@ else
 fi
 rm -f "${HOMEPAGE_BODY}"
 
+# --- Test: PWA shell assets are embedded in the release binary ---
+echo "--- PWA Assets ---"
+for PWA_PATH in "/static/manifest.json" "/static/icon-192.png" "/static/icon-512.png" "/sw.js"; do
+  HTTP_CODE=$(curl -k -s -o /dev/null -w "%{http_code}" -b "${COOKIE_JAR}" "${BASE_URL}${PWA_PATH}" 2>/dev/null || echo "000")
+  if [ "${HTTP_CODE}" = "200" ]; then
+    pass "GET ${PWA_PATH} returns 200 OK"
+  else
+    fail "GET ${PWA_PATH} returned ${HTTP_CODE} (expected 200)"
+  fi
+done
+
 # --- Test: Database file was created ---
 echo "--- Database File ---"
 if [ -f "${DB_PATH}" ]; then

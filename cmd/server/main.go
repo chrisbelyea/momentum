@@ -122,6 +122,24 @@ func main() {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		staticFileServer.ServeHTTP(w, r)
 	})))
+	// The worker must be served from the origin root so it can control the
+	// application pages. Keep it out of the immutable static-asset policy and
+	// allow prompt updates when a new binary is installed.
+	mux.HandleFunc("/sw.js", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		script, err := fs.ReadFile(staticFiles, "sw.js")
+		if err != nil {
+			http.Error(w, "service worker unavailable", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Service-Worker-Allowed", "/")
+		_, _ = w.Write(script)
+	})
 
 	// Web UI routes
 	mux.Handle("/", authService.Require(http.HandlerFunc(webHandler.HandleIndex)))

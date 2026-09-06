@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>Momentum</title>
+  <rect width="512" height="512" rx="112" fill="#1976d2"/>
+  <path d="M100 365V147h61l95 121 95-121h61v218h-64V246l-92 113-92-113v119z" fill="#fff"/>
+  <path d="M100 365h312" stroke="#80cbc4" stroke-width="16" stroke-linecap="round"/>
+</svg>
