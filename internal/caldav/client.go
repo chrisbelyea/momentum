@@ -198,6 +198,42 @@ func (c *Client) DiscoverCollections(ctx context.Context) ([]Collection, error) 
 	return collections, nil
 }
 
+// ListTodos lists VTODO resources in a collection and fetches their canonical
+// iCalendar bodies. It intentionally performs a bounded Depth-1 discovery
+// followed by bounded GETs instead of assuming provider-specific REPORT
+// extensions.
+func (c *Client) ListTodos(ctx context.Context, collectionHref string) ([]RemoteTodo, error) {
+	body := []byte(`<?xml version="1.0" encoding="utf-8" ?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:resourcetype/><d:getetag/><d:getcontenttype/></d:prop></d:propfind>`)
+	resp, err := c.do(ctx, "PROPFIND", collectionHref, body, func(req *http.Request) {
+		req.Header.Set("Depth", "1")
+		req.Header.Set("Content-Type", "application/xml; charset=utf-8")
+		req.Header.Set("Accept", "application/xml")
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusMultiStatus {
+		return nil, &HTTPError{Method: "PROPFIND", URL: collectionHref, Status: resp.StatusCode}
+	}
+	var result multistatus
+	if err := xml.NewDecoder(io.LimitReader(resp.Body, maxCalDAVResponseBytes)).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode CalDAV task listing: %w", err)
+	}
+	var todos []RemoteTodo
+	for _, item := range result.Responses {
+		if item.Propstat.Prop.ResourceType.Collection != nil || !strings.Contains(strings.ToLower(item.Propstat.Prop.ContentType), "text/calendar") {
+			continue
+		}
+		todo, err := c.GetTodo(ctx, item.Href)
+		if err != nil {
+			return nil, err
+		}
+		todos = append(todos, *todo)
+	}
+	return todos, nil
+}
+
 // GetTodo retrieves and parses one external VTODO resource.
 func (c *Client) GetTodo(ctx context.Context, href string) (*RemoteTodo, error) {
 	return c.fetchTodo(ctx, http.MethodGet, href)
@@ -379,6 +415,8 @@ type propstat struct {
 }
 type discoveryProp struct {
 	DisplayName  string `xml:"displayname"`
+	ETag         string `xml:"getetag"`
+	ContentType  string `xml:"getcontenttype"`
 	ResourceType struct {
 		Collection *struct{} `xml:"collection"`
 		Calendar   *struct{} `xml:"calendar"`
