@@ -172,6 +172,69 @@ For production deployments set `MOMENTUM_ENCRYPTION_KEY` to a securely generated
 
 ### Deployment as a service
 
+The release archives contain native, per-user setup helpers under
+`scripts/packaging/`. They keep the database and configuration under the
+operating system's writable user-data directories and do not require a
+repository checkout at runtime.
+
+#### Linux launcher and systemd user service
+
+For a one-off launch from an extracted archive:
+
+```bash
+./scripts/packaging/linux/run-momentum.sh ./momentum-server
+```
+
+The launcher creates `${XDG_CONFIG_HOME:-$HOME/.config}/Momentum` with mode
+700 and sets `DB_PATH` to `momentum.db` in that directory. `MOMENTUM_DATA_DIR`,
+`DB_PATH`, and `PORT` may be set explicitly. To install a user service (no
+`sudo` required):
+
+```bash
+./scripts/packaging/linux/install-user.sh ./momentum-server
+systemctl --user status momentum.service
+```
+
+The service unit is sandboxed, restarts on failure, and writes only to the
+Momentum data directory. Enable lingering with `loginctl enable-linger` only
+if the service must run while the user is logged out.
+
+#### Windows launcher and service
+
+From PowerShell in an extracted release directory:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\packaging\windows\Install-Momentum.ps1 -BinaryPath .\momentum-server.exe
+.\Momentum\Run-Momentum.ps1
+```
+
+The installer uses `%LOCALAPPDATA%\Momentum` for the executable and
+`%APPDATA%\Momentum\momentum.db` for data. To register an automatic Windows
+service, rerun from an elevated PowerShell prompt with
+`-RegisterService`; it refuses to replace an existing service implicitly.
+
+The service and launcher both listen on port 8080 by default. The service
+uses the binary's OS-specific default database path; use the launcher when a
+custom `PORT` or `DB_PATH` is required.
+
+#### First run, upgrades, and backups
+
+The development TLS certificate is self-signed. On first run, open the URL
+shown by the server locally and explicitly trust that certificate, or deploy
+Momentum behind a trusted TLS reverse proxy before exposing it beyond the
+host. Do not weaken browser certificate warnings for an internet-facing
+deployment. Restrict firewall exposure to trusted networks and bind/proxy
+accordingly.
+
+Stop the service cleanly before upgrading (`systemctl --user stop
+momentum.service`, or `Stop-Service Momentum`). Back up the SQLite database
+while the server is stopped by copying `momentum.db` and its `-wal`/`-shm`
+files together, or use SQLite's backup API. Keep a copy of the previous
+binary until the upgraded server has passed its health and task-workflow
+check. Runtime migrations are applied on startup; never replace a database
+without a tested backup.
+
 **Linux (systemd)**
 
 Create `/etc/systemd/system/momentum.service`:
