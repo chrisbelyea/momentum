@@ -8,32 +8,54 @@ import (
 
 // Task represents a task (VTODO) in the system
 type Task struct {
-	ID          int        `json:"id"`
-	BackendID   int        `json:"backend_id"`
-	ExternalID  *string    `json:"external_id,omitempty"`
-	Title       string     `json:"title"`
-	Description *string    `json:"description,omitempty"`
-	Status      string     `json:"status"`
-	Priority    *int       `json:"priority,omitempty"`
-	DueAt       *time.Time `json:"due_at,omitempty"`
-	TagsJSON    *string    `json:"tags_json,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   *time.Time `json:"updated_at,omitempty"`
+	ID              int        `json:"id"`
+	BackendID       int        `json:"backend_id"`
+	UID             string     `json:"uid"`
+	ExternalID      *string    `json:"external_id,omitempty"`
+	Title           string     `json:"title"`
+	Description     *string    `json:"description,omitempty"`
+	Status          string     `json:"status"`
+	Priority        *int       `json:"priority,omitempty"`
+	DueAt           *time.Time `json:"due_at,omitempty"`
+	StartAt         *time.Time `json:"start_at,omitempty"`
+	CompletedAt     *time.Time `json:"completed_at,omitempty"`
+	DTStamp         time.Time  `json:"dtstamp"`
+	LastModified    *time.Time `json:"last_modified,omitempty"`
+	Sequence        int        `json:"sequence"`
+	PercentComplete *int       `json:"percent_complete,omitempty"`
+	TagsJSON        *string    `json:"tags_json,omitempty"`
+	RelatedToJSON   *string    `json:"related_to_json,omitempty"`
+	URL             *string    `json:"url,omitempty"`
+	Location        *string    `json:"location,omitempty"`
+	ExtraJSON       *string    `json:"extra_json,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       *time.Time `json:"updated_at,omitempty"`
 }
 
 // TaskRow represents a task row from the database with nullable fields
 type TaskRow struct {
-	ID          int
-	BackendID   int
-	ExternalID  sql.NullString
-	Title       string
-	Description sql.NullString
-	Status      string
-	Priority    sql.NullInt64
-	DueAt       sql.NullString
-	TagsJSON    sql.NullString
-	CreatedAt   string
-	UpdatedAt   sql.NullString
+	ID              int
+	BackendID       int
+	UID             sql.NullString
+	ExternalID      sql.NullString
+	Title           string
+	Description     sql.NullString
+	Status          string
+	Priority        sql.NullInt64
+	DueAt           sql.NullString
+	StartAt         sql.NullString
+	CompletedAt     sql.NullString
+	DTStamp         sql.NullString
+	LastModified    sql.NullString
+	Sequence        int
+	PercentComplete sql.NullInt64
+	TagsJSON        sql.NullString
+	RelatedToJSON   sql.NullString
+	URL             sql.NullString
+	Location        sql.NullString
+	ExtraJSON       sql.NullString
+	CreatedAt       string
+	UpdatedAt       sql.NullString
 }
 
 // ToTask converts a TaskRow to a Task, parsing nullable fields
@@ -41,8 +63,10 @@ func (r *TaskRow) ToTask() (*Task, error) {
 	task := &Task{
 		ID:        r.ID,
 		BackendID: r.BackendID,
+		UID:       r.UID.String,
 		Title:     r.Title,
 		Status:    r.Status,
+		Sequence:  r.Sequence,
 	}
 
 	// Handle nullable string fields
@@ -54,6 +78,22 @@ func (r *TaskRow) ToTask() (*Task, error) {
 	}
 	if r.TagsJSON.Valid {
 		task.TagsJSON = &r.TagsJSON.String
+	}
+	if r.RelatedToJSON.Valid {
+		task.RelatedToJSON = &r.RelatedToJSON.String
+	}
+	if r.URL.Valid {
+		task.URL = &r.URL.String
+	}
+	if r.Location.Valid {
+		task.Location = &r.Location.String
+	}
+	if r.ExtraJSON.Valid {
+		task.ExtraJSON = &r.ExtraJSON.String
+	}
+	if r.PercentComplete.Valid {
+		v := int(r.PercentComplete.Int64)
+		task.PercentComplete = &v
 	}
 
 	// Handle nullable int fields
@@ -83,6 +123,26 @@ func (r *TaskRow) ToTask() (*Task, error) {
 			return nil, fmt.Errorf("failed to parse due_at: %w", err)
 		}
 		task.DueAt = &dueAt
+	}
+	for _, field := range []struct {
+		value sql.NullString
+		dst   **time.Time
+		name  string
+	}{{r.StartAt, &task.StartAt, "start_at"}, {r.CompletedAt, &task.CompletedAt, "completed_at"}, {r.LastModified, &task.LastModified, "last_modified"}} {
+		if field.value.Valid {
+			v, err := parseTimestamp(field.value.String)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse %s: %w", field.name, err)
+			}
+			*field.dst = &v
+		}
+	}
+	if r.DTStamp.Valid {
+		v, err := parseTimestamp(r.DTStamp.String)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse dtstamp: %w", err)
+		}
+		task.DTStamp = v
 	}
 
 	return task, nil

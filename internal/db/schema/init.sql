@@ -34,7 +34,18 @@ CREATE TABLE IF NOT EXISTS tasks (
     status TEXT NOT NULL,
     priority INTEGER,
     due_at TIMESTAMP,
+    uid TEXT,
+    start_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    dtstamp TIMESTAMP,
+    last_modified TIMESTAMP,
+    sequence INTEGER NOT NULL DEFAULT 0,
+    percent_complete INTEGER,
     tags_json TEXT,
+    related_to_json TEXT,
+    url TEXT,
+    location TEXT,
+    extra_json TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP,
     FOREIGN KEY (backend_id) REFERENCES backends(id) ON DELETE CASCADE
@@ -71,3 +82,5 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS idx_credentials_user_id ON credentials(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+-- Canonical VTODO persistence fields, schema version 3.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_uid ON tasks(uid) WHERE uid IS NOT NULL;
