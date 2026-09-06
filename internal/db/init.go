@@ -19,7 +19,10 @@ var authSchemaSQL string
 //go:embed schema/changelog/003-vtodo.sql
 var vtodoSchemaSQL string
 
-const schemaVersion = 3
+//go:embed schema/changelog/004-sync.sql
+var syncSchemaSQL string
+
+const schemaVersion = 4
 
 // InitializeSchema creates a fresh database or upgrades an older shipped
 // shape. The migration ledger prevents a partial schema from being treated as
@@ -49,6 +52,9 @@ func InitializeSchema(database *sql.DB) error {
 	}
 	if err := applyVTodoSchema(database); err != nil {
 		return fmt.Errorf("apply VTODO schema: %w", err)
+	}
+	if _, err := database.Exec(syncSchemaSQL); err != nil {
+		return fmt.Errorf("apply synchronization schema: %w", err)
 	}
 	_, err = database.Exec("INSERT OR REPLACE INTO momentum_schema_migrations(version) VALUES (?)", schemaVersion)
 	return err
