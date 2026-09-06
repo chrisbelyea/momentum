@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Momentum - Kanban Board</title>
     <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
     <style>
         .view-nav {
             display: flex;
@@ -507,6 +508,16 @@
                     emptyDiv.textContent = statusText[columnStatus] || 'No tasks';
                     column.appendChild(emptyDiv);
                 }
+            });
+        }
+    </script>
+    <script>
+        // The service worker caches only public static assets; authenticated
+        // pages and API responses always continue to use the network.
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('/sw.js', {scope: '/'})
+                    .catch(function (error) { console.warn('Momentum offline shell unavailable:', error); });
             });
         }
     </script>

@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Momentum - List View</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
     <style>
         * {
             margin: 0;
@@ -331,6 +333,14 @@
                 });
             } catch(e) { console.warn('Failed to parse task tags:', e); }
         });
+    </script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('/sw.js', {scope: '/'})
+                    .catch(function (error) { console.warn('Momentum offline shell unavailable:', error); });
+            });
+        }
     </script>
 </body>
 </html>
