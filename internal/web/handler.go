@@ -16,15 +16,21 @@ import (
 
 // Handler handles web UI requests
 type Handler struct {
-	taskRepo  *db.TaskRepository
-	templates *template.Template
+	taskRepo    *db.TaskRepository
+	backendRepo *db.BackendRepository
+	templates   *template.Template
 }
 
 // NewHandler creates a new web Handler
-func NewHandler(taskRepo *db.TaskRepository) *Handler {
+func NewHandler(taskRepo *db.TaskRepository, backendRepos ...*db.BackendRepository) *Handler {
+	var backendRepo *db.BackendRepository
+	if len(backendRepos) > 0 {
+		backendRepo = backendRepos[0]
+	}
 	return &Handler{
-		taskRepo:  taskRepo,
-		templates: template.Must(template.ParseFS(webassets.Files, "templates/*.html")),
+		taskRepo:    taskRepo,
+		backendRepo: backendRepo,
+		templates:   template.Must(template.ParseFS(webassets.Files, "templates/*.html")),
 	}
 }
 
@@ -39,7 +45,7 @@ func (h *Handler) HandleIndex(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		userID = 1
 	}
-	backendID, err := h.taskRepo.DefaultBackendForUser(userID)
+	backendID, err := h.backendForRequest(r, userID)
 	if err != nil {
 		http.Error(w, "no task backend configured", 500)
 		return
@@ -63,7 +69,9 @@ func (h *Handler) HandleIndex(w http.ResponseWriter, r *http.Request) {
 		InProgressTasks []*models.Task
 		DoneTasks       []*models.Task
 		Filter          TaskFilter
-	}{Filter: filter}
+		Backends        []*models.Backend
+		BackendID       int
+	}{Filter: filter, BackendID: backendID, Backends: h.backendsForUser(userID)}
 
 	for _, task := range tasks {
 		switch task.Status {
@@ -93,7 +101,7 @@ func (h *Handler) HandleList(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		userID = 1
 	}
-	backendID, err := h.taskRepo.DefaultBackendForUser(userID)
+	backendID, err := h.backendForRequest(r, userID)
 	if err != nil {
 		http.Error(w, "no task backend configured", 500)
 		return
@@ -109,17 +117,157 @@ func (h *Handler) HandleList(w http.ResponseWriter, r *http.Request) {
 	tasks = ApplyFilter(tasks, filter)
 
 	data := struct {
-		Tasks  []*models.Task
-		Filter TaskFilter
+		Tasks     []*models.Task
+		Filter    TaskFilter
+		Backends  []*models.Backend
+		BackendID int
 	}{
-		Tasks:  tasks,
-		Filter: filter,
+		Tasks:     tasks,
+		Filter:    filter,
+		BackendID: backendID,
+		Backends:  h.backendsForUser(userID),
 	}
 
 	if err := h.templates.ExecuteTemplate(w, "list.html", data); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to render template: %v", err), http.StatusInternalServerError)
 		return
 	}
+}
+
+func (h *Handler) backendForRequest(r *http.Request, userID int) (int, error) {
+	if raw := r.URL.Query().Get("backend_id"); raw != "" {
+		id, err := strconv.Atoi(raw)
+		if err != nil || id <= 0 || !h.taskRepo.BackendOwned(id, userID) {
+			return 0, fmt.Errorf("backend not found")
+		}
+		return id, nil
+	}
+	return h.taskRepo.DefaultBackendForUser(userID)
+}
+
+func (h *Handler) backendsForUser(userID int) []*models.Backend {
+	if h.backendRepo == nil {
+		return nil
+	}
+	backends, err := h.backendRepo.List(userID)
+	if err != nil {
+		return nil
+	}
+	for _, b := range backends {
+		b.SanitizeForResponse()
+	}
+	return backends
+}
+
+// HandleTasks serves the browser task API: create, edit, delete, and status updates.
+func (h *Handler) HandleTasks(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/tasks")
+	if path == "" || path == "/" {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		h.createTask(w, r)
+		return
+	}
+	if strings.HasSuffix(path, "/status") {
+		h.HandleUpdateStatus(w, r)
+		return
+	}
+	id, err := strconv.Atoi(strings.Trim(path, "/"))
+	if err != nil || id <= 0 {
+		http.Error(w, "Invalid task ID", http.StatusBadRequest)
+		return
+	}
+	switch r.Method {
+	case http.MethodPut:
+		h.updateTask(w, r, id)
+	case http.MethodDelete:
+		h.deleteTask(w, r, id)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *Handler) createTask(w http.ResponseWriter, r *http.Request) {
+	uid, ok := auth.UserIDFromRequest(r)
+	if !ok {
+		uid = 1
+	}
+	var task models.Task
+	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+		http.Error(w, "Invalid request body", 400)
+		return
+	}
+	if task.BackendID == 0 {
+		var err error
+		task.BackendID, err = h.backendForRequest(r, uid)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+	}
+	if task.Title == "" {
+		http.Error(w, "title is required", 400)
+		return
+	}
+	if task.Status == "" {
+		task.Status = models.StatusNeedsAction
+	}
+	if !h.taskRepo.BackendOwned(task.BackendID, uid) {
+		http.Error(w, "backend not found", 404)
+		return
+	}
+	if err := h.taskRepo.Create(&task); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(task)
+}
+
+func (h *Handler) updateTask(w http.ResponseWriter, r *http.Request, id int) {
+	uid, ok := auth.UserIDFromRequest(r)
+	if !ok {
+		uid = 1
+	}
+	old, err := h.taskRepo.GetForUser(id, uid)
+	if err != nil || old == nil {
+		http.Error(w, "Task not found", 404)
+		return
+	}
+	var task models.Task
+	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+		http.Error(w, "Invalid request body", 400)
+		return
+	}
+	task.ID, task.BackendID = id, old.BackendID
+	if task.Title == "" {
+		http.Error(w, "title is required", 400)
+		return
+	}
+	if task.Status == "" {
+		task.Status = old.Status
+	}
+	if err := h.taskRepo.UpdateForUser(&task, uid); err != nil {
+		http.Error(w, "Task not found", 404)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(task)
+}
+
+func (h *Handler) deleteTask(w http.ResponseWriter, r *http.Request, id int) {
+	uid, ok := auth.UserIDFromRequest(r)
+	if !ok {
+		uid = 1
+	}
+	if err := h.taskRepo.DeleteForUser(id, uid); err != nil {
+		http.Error(w, "Task not found", 404)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // HandleUpdateStatus updates a task's status via PATCH

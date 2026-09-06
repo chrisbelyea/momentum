@@ -74,6 +74,13 @@
         .btn-primary { background: #1976d2; color: #fff; }
         .btn-secondary { background: #e0e0e0; color: #333; display: inline-block; }
 
+        .task-form { max-width: 700px; margin: 0 auto 20px; padding: 14px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+        .task-form input, .task-form textarea, .task-form select { padding: 8px; border: 1px solid #ddd; border-radius: 5px; margin-right: 6px; }
+        .task-actions { margin-top: 8px; display: flex; gap: 6px; }
+        .task-actions button { border: 0; border-radius: 4px; padding: 5px 8px; cursor: pointer; }
+        .edit-task { background: #e3f2fd; color: #1565c0; }
+        .delete-task { background: #ffebee; color: #b71c1c; }
+
         * {
             margin: 0;
             padding: 0;
@@ -220,6 +227,27 @@
         <a href="/list">📄 List</a>
     </div>
 
+    <form id="task-form" class="task-form">
+        <strong>Add task</strong><br>
+        <input name="title" required placeholder="Task title" aria-label="Task title">
+        <select name="backend_id" aria-label="Task backend">
+            {{ range .Backends }}<option value="{{ .ID }}"{{ if eq .ID $.BackendID }} selected{{ end }}>{{ .Name }}</option>{{ end }}
+        </select>
+        <div class="task-actions"><button class="btn-primary" type="submit">Create task</button></div>
+        <p id="task-form-status" role="status" aria-live="polite"></p>
+    </form>
+
+    <dialog id="edit-dialog" aria-labelledby="edit-dialog-title">
+        <form id="edit-form" method="dialog" class="task-form">
+            <h2 id="edit-dialog-title">Edit task</h2>
+            <label for="edit-title">Task title</label>
+            <input id="edit-title" name="title" required>
+            <input type="hidden" name="id">
+            <div class="task-actions"><button value="cancel" type="button" id="edit-cancel">Cancel</button><button value="save" class="btn-primary" type="submit">Save changes</button></div>
+            <p id="edit-status" role="status" aria-live="polite"></p>
+        </form>
+    </dialog>
+
     <!-- Tag filter bar -->
     <form class="filter-bar" method="GET" action="/">
         <div>
@@ -251,6 +279,7 @@
                             <span>Priority: {{ .Priority }}</span>
                             {{ end }}
                         </div>
+                        <div class="task-actions"><button type="button" class="edit-task" data-task-id="{{ .ID }}">Edit</button><button type="button" class="delete-task" data-task-id="{{ .ID }}">Delete</button></div>
                     </div>
                     {{ end }}
                 {{ else }}
@@ -279,6 +308,7 @@
                             <span>Priority: {{ .Priority }}</span>
                             {{ end }}
                         </div>
+                        <div class="task-actions"><button type="button" class="edit-task" data-task-id="{{ .ID }}">Edit</button><button type="button" class="delete-task" data-task-id="{{ .ID }}">Delete</button></div>
                     </div>
                     {{ end }}
                 {{ else }}
@@ -307,6 +337,7 @@
                             <span>Priority: {{ .Priority }}</span>
                             {{ end }}
                         </div>
+                        <div class="task-actions"><button type="button" class="edit-task" data-task-id="{{ .ID }}">Edit</button><button type="button" class="delete-task" data-task-id="{{ .ID }}">Delete</button></div>
                     </div>
                     {{ end }}
                 {{ else }}
@@ -317,6 +348,41 @@
     </div>
 
     <script>
+        const taskForm = document.getElementById('task-form');
+        const formStatus = document.getElementById('task-form-status');
+        const backendSelect = taskForm && taskForm.elements.backend_id;
+        if (backendSelect) backendSelect.addEventListener('change', () => {
+            const url = new URL(location.href); url.searchParams.set('backend_id', backendSelect.value); location.href = url;
+        });
+        if (taskForm) taskForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const body = { title: taskForm.elements.title.value, backend_id: Number(taskForm.elements.backend_id.value) };
+            const response = await fetch('/api/tasks', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+            if (!response.ok) { formStatus.textContent = 'Could not create task: ' + await response.text(); return; }
+            location.reload();
+        });
+        const editDialog = document.getElementById('edit-dialog');
+        const editForm = document.getElementById('edit-form');
+        const editStatus = document.getElementById('edit-status');
+        document.querySelectorAll('.edit-task').forEach(button => button.addEventListener('click', async () => {
+            editForm.elements.id.value = button.dataset.taskId;
+            editForm.elements.title.value = button.closest('.task-card').querySelector('.task-title').textContent.trim();
+            editStatus.textContent = '';
+            editDialog.showModal();
+        }));
+        document.getElementById('edit-cancel').addEventListener('click', () => editDialog.close('cancel'));
+        editForm.addEventListener('submit', async event => {
+            event.preventDefault();
+            const response = await fetch('/api/tasks/' + editForm.elements.id.value, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({title: editForm.elements.title.value.trim()}) });
+            if (!response.ok) { editStatus.textContent = 'Could not update task: ' + await response.text(); return; }
+            editDialog.close(); location.reload();
+        });
+        document.querySelectorAll('.delete-task').forEach(button => button.addEventListener('click', async () => {
+            const response = await fetch('/api/tasks/' + button.dataset.taskId, { method: 'DELETE' });
+            if (!response.ok) { formStatus.textContent = 'Could not delete task: ' + await response.text(); return; }
+            location.reload();
+        }));
+
         // Drag and Drop functionality using HTML5 Drag and Drop API
         let draggedElement = null;
 
