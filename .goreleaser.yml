@@ -87,6 +87,9 @@ archives:
           - zip
     files:
       - LICENSE
+      # Native launch and service setup for users who install from an archive.
+      - scripts/packaging/**
+      - docs/release-packaging.md
 
 checksum:
   name_template: "checksums.txt"
