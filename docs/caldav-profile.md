@@ -50,9 +50,27 @@ The repository contains standards-focused `httptest` fixtures covering:
 - `calendar-query` and `calendar-multiget` XML responses;
 - VTODO create, fetch, conditional update, and delete;
 - outbound discovery, authenticated VTODO create/fetch/update/delete, ETag
-  conditions, and cross-origin href rejection.
+  conditions, and cross-origin href rejection;
+- a complete outbound lifecycle matrix in
+  `internal/caldav/interop_matrix_test.go`.
 
-These fixtures do not claim certification against a named hosted provider.
-Before declaring provider interoperability complete, run the same lifecycle
-matrix against a real standards server and at least one provider-compatible
-implementation; that work remains tracked by issue #67.
+The matrix has two explicit local profiles. `strict-rfc-server` requires
+`Depth: 1`, XML and iCalendar media types, `If-None-Match: *` for creation,
+and matching `If-Match` validators for updates and deletes. It returns relative
+collection-member hrefs and a VTODO representation from successful PUTs.
+`hosted-provider-shaped-server` returns absolute same-origin hrefs, includes
+media-type parameters such as `charset=utf-8`, and exercises a successful
+empty `204 No Content` update response. Both profiles require Basic
+authentication and run the same discovery, list, create, read, update, and
+delete sequence over TLS.
+
+The matrix also verifies that a relative member href is resolved against the
+collection request URI, rather than the configured discovery root. This is a
+wire-compatibility behavior and is intentionally covered by the strict
+profile.
+
+These are deterministic protocol fixtures, not live-provider certification.
+They do not prove compatibility with Google, Apple, Nextcloud, Radicale, or
+any other named service. A real-provider run of this matrix, including
+provider-specific authentication and discovery behavior, remains required by
+issue #67 before claiming hosted-provider interoperability complete.
