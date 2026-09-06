@@ -17,7 +17,9 @@ type Task struct {
 	Status          string     `json:"status"`
 	Priority        *int       `json:"priority,omitempty"`
 	DueAt           *time.Time `json:"due_at,omitempty"`
+	DueDateOnly     bool       `json:"due_date_only,omitempty"`
 	StartAt         *time.Time `json:"start_at,omitempty"`
+	StartDateOnly   bool       `json:"start_date_only,omitempty"`
 	CompletedAt     *time.Time `json:"completed_at,omitempty"`
 	DTStamp         time.Time  `json:"dtstamp"`
 	LastModified    *time.Time `json:"last_modified,omitempty"`
@@ -43,7 +45,9 @@ type TaskRow struct {
 	Status          string
 	Priority        sql.NullInt64
 	DueAt           sql.NullString
+	DueDateOnly     sql.NullInt64
 	StartAt         sql.NullString
+	StartDateOnly   sql.NullInt64
 	CompletedAt     sql.NullString
 	DTStamp         sql.NullString
 	LastModified    sql.NullString
@@ -61,12 +65,14 @@ type TaskRow struct {
 // ToTask converts a TaskRow to a Task, parsing nullable fields
 func (r *TaskRow) ToTask() (*Task, error) {
 	task := &Task{
-		ID:        r.ID,
-		BackendID: r.BackendID,
-		UID:       r.UID.String,
-		Title:     r.Title,
-		Status:    r.Status,
-		Sequence:  r.Sequence,
+		ID:            r.ID,
+		BackendID:     r.BackendID,
+		UID:           r.UID.String,
+		Title:         r.Title,
+		Status:        r.Status,
+		Sequence:      r.Sequence,
+		DueDateOnly:   r.DueDateOnly.Valid && r.DueDateOnly.Int64 != 0,
+		StartDateOnly: r.StartDateOnly.Valid && r.StartDateOnly.Int64 != 0,
 	}
 
 	// Handle nullable string fields

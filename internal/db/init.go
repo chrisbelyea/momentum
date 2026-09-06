@@ -22,7 +22,10 @@ var vtodoSchemaSQL string
 //go:embed schema/changelog/004-sync.sql
 var syncSchemaSQL string
 
-const schemaVersion = 4
+//go:embed schema/changelog/005-vtodo-date-only.sql
+var dateOnlySchemaSQL string
+
+const schemaVersion = 5
 
 // InitializeSchema creates a fresh database or upgrades an older shipped
 // shape. The migration ledger prevents a partial schema from being treated as
@@ -56,8 +59,42 @@ func InitializeSchema(database *sql.DB) error {
 	if _, err := database.Exec(syncSchemaSQL); err != nil {
 		return fmt.Errorf("apply synchronization schema: %w", err)
 	}
+	if err := applyDateOnlySchema(database); err != nil {
+		return fmt.Errorf("apply date-only schema: %w", err)
+	}
 	_, err = database.Exec("INSERT OR REPLACE INTO momentum_schema_migrations(version) VALUES (?)", schemaVersion)
 	return err
+}
+
+func applyDateOnlySchema(database *sql.DB) error {
+	var sqlLines []string
+	for _, line := range strings.Split(dateOnlySchemaSQL, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "--") {
+			sqlLines = append(sqlLines, line)
+		}
+	}
+	for _, statement := range strings.Split(strings.Join(sqlLines, "\n"), ";") {
+		statement = strings.TrimSpace(statement)
+		if statement == "" {
+			continue
+		}
+		fields := strings.Fields(statement)
+		if len(fields) < 6 {
+			return fmt.Errorf("invalid date-only migration statement %q", statement)
+		}
+		column := fields[5]
+		var count int
+		if err := database.QueryRow("SELECT count(*) FROM pragma_table_info('tasks') WHERE name=?", column).Scan(&count); err != nil {
+			return err
+		}
+		if count == 1 {
+			continue
+		}
+		if _, err := database.Exec(statement); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func applyVTodoSchema(database *sql.DB) error {

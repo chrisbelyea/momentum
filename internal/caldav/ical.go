@@ -32,7 +32,7 @@ func taskFromTodo(t *vtodo.Todo) models.Task {
 	relatedJSON := jsonString(t.RelatedTo)
 	extraJSON := jsonString(t.Extra)
 	return models.Task{UID: t.UID, Title: t.Summary, Description: stringPtr(t.Description), Status: t.Status,
-		Priority: t.Priority, DueAt: t.Due, StartAt: t.Start, CompletedAt: t.Completed,
+		Priority: t.Priority, DueAt: t.Due, DueDateOnly: t.DueDateOnly, StartAt: t.Start, StartDateOnly: t.StartDateOnly, CompletedAt: t.Completed,
 		DTStamp: t.DTStamp, LastModified: t.LastModified, Sequence: t.Sequence,
 		PercentComplete: t.PercentComplete, TagsJSON: tagsJSON, RelatedToJSON: relatedJSON,
 		ExtraJSON: extraJSON, URL: stringPtr(t.URL), Location: stringPtr(t.Location)}
@@ -56,8 +56,9 @@ func todoFromTask(t *models.Task) *vtodo.Todo {
 		stamp = time.Now().UTC()
 	}
 	return &vtodo.Todo{UID: t.UID, Summary: t.Title, Description: d, Status: t.Status, Due: t.DueAt,
-		Start: t.StartAt, Completed: t.CompletedAt, DTStamp: stamp, LastModified: t.LastModified,
-		Priority: t.Priority, PercentComplete: t.PercentComplete, Sequence: t.Sequence,
+		Start: t.StartAt, StartDateOnly: t.StartDateOnly, Completed: t.CompletedAt, DTStamp: stamp, LastModified: t.LastModified,
+		DueDateOnly: t.DueDateOnly,
+		Priority:    t.Priority, PercentComplete: t.PercentComplete, Sequence: t.Sequence,
 		Categories: decodeStrings(t.TagsJSON), RelatedTo: decodeStrings(t.RelatedToJSON),
 		Extra: decodeProperties(t.ExtraJSON), URL: u, Location: l}
 }

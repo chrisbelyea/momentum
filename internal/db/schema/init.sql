@@ -156,3 +156,6 @@ CREATE TABLE IF NOT EXISTS sync_conflicts (
     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sync_conflicts_backend_status ON sync_conflicts(backend_id, status);
+-- Preserve whether DTSTART and DUE were date-only values (schema version 5).
+ALTER TABLE tasks ADD COLUMN due_date_only INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE tasks ADD COLUMN start_date_only INTEGER NOT NULL DEFAULT 0;

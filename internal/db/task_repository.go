@@ -23,7 +23,7 @@ func NewTaskRepository(db *sql.DB) *TaskRepository {
 func (r *TaskRepository) List(backendID int) ([]*models.Task, error) {
 	query := `
 		SELECT id, backend_id, uid, external_id, title, description, status,
-		       priority, due_at, start_at, completed_at, dtstamp, last_modified,
+		       priority, due_at, due_date_only, start_at, start_date_only, completed_at, dtstamp, last_modified,
 		       sequence, percent_complete, tags_json, related_to_json, url, location, extra_json, created_at, updated_at
 		FROM tasks
 		WHERE backend_id = ?
@@ -49,7 +49,9 @@ func (r *TaskRepository) List(backendID int) ([]*models.Task, error) {
 			&taskRow.Status,
 			&taskRow.Priority,
 			&taskRow.DueAt,
+			&taskRow.DueDateOnly,
 			&taskRow.StartAt,
+			&taskRow.StartDateOnly,
 			&taskRow.CompletedAt,
 			&taskRow.DTStamp,
 			&taskRow.LastModified,
@@ -127,7 +129,7 @@ func (r *TaskRepository) DefaultBackendForUser(userID int) (int, error) {
 func (r *TaskRepository) Get(id int) (*models.Task, error) {
 	query := `
 		SELECT id, backend_id, uid, external_id, title, description, status,
-		       priority, due_at, start_at, completed_at, dtstamp, last_modified,
+		       priority, due_at, due_date_only, start_at, start_date_only, completed_at, dtstamp, last_modified,
 		       sequence, percent_complete, tags_json, related_to_json, url, location, extra_json, created_at, updated_at
 		FROM tasks
 		WHERE id = ?
@@ -144,7 +146,9 @@ func (r *TaskRepository) Get(id int) (*models.Task, error) {
 		&taskRow.Status,
 		&taskRow.Priority,
 		&taskRow.DueAt,
+		&taskRow.DueDateOnly,
 		&taskRow.StartAt,
+		&taskRow.StartDateOnly,
 		&taskRow.CompletedAt,
 		&taskRow.DTStamp,
 		&taskRow.LastModified,
@@ -193,9 +197,9 @@ func (r *TaskRepository) Create(task *models.Task) error {
 	query := `
 		INSERT INTO tasks (
 			backend_id, uid, external_id, title, description, status,
-			priority, due_at, start_at, completed_at, dtstamp, last_modified,
+			priority, due_at, due_date_only, start_at, start_date_only, completed_at, dtstamp, last_modified,
 			sequence, percent_complete, tags_json, related_to_json, url, location, extra_json, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	result, err := r.db.Exec(
@@ -208,7 +212,9 @@ func (r *TaskRepository) Create(task *models.Task) error {
 		task.Status,
 		task.Priority,
 		task.DueAt,
+		task.DueDateOnly,
 		task.StartAt,
+		task.StartDateOnly,
 		task.CompletedAt,
 		task.DTStamp,
 		task.LastModified,
@@ -246,7 +252,7 @@ func (r *TaskRepository) Update(task *models.Task) error {
 	query := `
 		UPDATE tasks
 		SET backend_id = ?, uid = ?, external_id = ?, title = ?, description = ?,
-		    status = ?, priority = ?, due_at = ?, start_at = ?, completed_at = ?,
+		    status = ?, priority = ?, due_at = ?, due_date_only = ?, start_at = ?, start_date_only = ?, completed_at = ?,
 		    last_modified = ?, sequence = ?, percent_complete = ?, tags_json = ?,
 		    related_to_json = ?, url = ?, location = ?, extra_json = ?, updated_at = ?
 		WHERE id = ?
@@ -262,7 +268,9 @@ func (r *TaskRepository) Update(task *models.Task) error {
 		task.Status,
 		task.Priority,
 		task.DueAt,
+		task.DueDateOnly,
 		task.StartAt,
+		task.StartDateOnly,
 		task.CompletedAt,
 		task.LastModified,
 		task.Sequence,
