@@ -91,6 +91,35 @@ func TestUpdateStatus(t *testing.T) {
 	}
 }
 
+func TestRenderedViewsDoNotDependOnWorkingDirectory(t *testing.T) {
+	database := setupTestDB(t)
+	defer database.Close()
+
+	// A release binary is commonly started by a service manager whose working
+	// directory is unrelated to the installation directory. The handler must
+	// still load and render its templates in that situation.
+	t.Chdir(t.TempDir())
+	handler := NewHandler(db.NewTaskRepository(database))
+
+	for _, path := range []string{"/", "/list"} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			rec := httptest.NewRecorder()
+			if path == "/" {
+				handler.HandleIndex(rec, req)
+			} else {
+				handler.HandleList(rec, req)
+			}
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET %s returned %d: %s", path, rec.Code, rec.Body.String())
+			}
+			if !bytes.Contains(rec.Body.Bytes(), []byte("Momentum")) {
+				t.Fatalf("GET %s did not render embedded template", path)
+			}
+		})
+	}
+}
+
 func TestUpdateStatusNotFound(t *testing.T) {
 	database := setupTestDB(t)
 	defer database.Close()

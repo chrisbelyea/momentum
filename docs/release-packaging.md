@@ -164,7 +164,7 @@ At runtime the server reads configuration from environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DB_PATH` | `momentum.db` | Path to the SQLite database file |
+| `DB_PATH` | OS user config directory / `Momentum/momentum.db` | Path to the SQLite database file. On Linux this is typically `~/.config/Momentum/momentum.db`; on Windows it is typically `%AppData%\\Momentum\\momentum.db`. |
 | `PORT` | `8080` | TCP port to listen on |
 | `MOMENTUM_ENCRYPTION_KEY` | *(dev default)* | AES encryption key for stored credentials |
 
@@ -245,14 +245,10 @@ dist/web.tar.gz.sha256   # SHA-256 checksum
 
 ### Serving the assets
 
-The server binary serves static assets from the `web/static/` directory at the `/static/` URL prefix. When deploying, the server binary and the `web/` directory must be co-located (or the `WorkingDirectory` set to the directory that contains `web/`):
+The server binary embeds the templates and static assets at build time and serves static assets at the `/static/` URL prefix. No `web/` directory is required beside the binary, and the application may be launched from any working directory:
 
 ```
-/usr/local/share/momentum/
-  momentum-server          # server binary
-  web/
-    templates/
-    static/
+/usr/local/bin/momentum-server  # self-contained server binary
 ```
 
 ### PWA installability checklist

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"database/sql"
 	"fmt"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -15,9 +16,11 @@ import (
 
 	"github.com/chrisbelyea/momentum/internal/backend"
 	"github.com/chrisbelyea/momentum/internal/caldav"
+	"github.com/chrisbelyea/momentum/internal/config"
 	"github.com/chrisbelyea/momentum/internal/crypto"
 	"github.com/chrisbelyea/momentum/internal/db"
 	"github.com/chrisbelyea/momentum/internal/web"
+	webassets "github.com/chrisbelyea/momentum/web"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -26,7 +29,10 @@ var version = "dev"
 
 func main() {
 	// Get configuration from environment
-	dbPath := getEnv("DB_PATH", "momentum.db")
+	dbPath, err := config.DatabasePath()
+	if err != nil {
+		log.Fatalf("Failed to determine database path: %v", err)
+	}
 	port := getEnv("PORT", "8443")
 	tlsCert := os.Getenv("TLS_CERT")
 	tlsKey := os.Getenv("TLS_KEY")
@@ -98,7 +104,11 @@ func main() {
 
 	// Static file serving (PWA assets: manifest.json, icons, service worker).
 	// Directory listings are disabled; individual files are cached for one year.
-	staticFileServer := http.FileServer(http.Dir("web/static"))
+	staticFiles, err := fs.Sub(webassets.Files, "static")
+	if err != nil {
+		log.Fatalf("Failed to load embedded static assets: %v", err)
+	}
+	staticFileServer := http.FileServer(http.FS(staticFiles))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Disable directory listings
 		if r.URL.Path == "" || r.URL.Path[len(r.URL.Path)-1] == '/' {
