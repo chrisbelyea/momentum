@@ -169,9 +169,19 @@ At runtime the server reads configuration from environment variables:
 |----------|---------|-------------|
 | `DB_PATH` | OS user config directory / `Momentum/momentum.db` | Path to the SQLite database file. On Linux this is typically `~/.config/Momentum/momentum.db`; on Windows it is typically `%AppData%\\Momentum\\momentum.db`. |
 | `PORT` | `8080` | TCP port to listen on |
-| `MOMENTUM_ENCRYPTION_KEY` | *(dev default)* | AES encryption key for stored credentials |
+| `MOMENTUM_ENCRYPTION_KEY` | *(required in production)* | AES encryption key for stored credentials; the server exits when absent unless explicit `MOMENTUM_DEV_MODE=1` is set |
 
-For production deployments set `MOMENTUM_ENCRYPTION_KEY` to a securely generated random value.
+For production deployments set `MOMENTUM_ENCRYPTION_KEY` to a securely generated random value. `MOMENTUM_DEV_MODE=1` is only for local development and integration tests.
+
+### Linux runtime compatibility
+
+Official Linux archives are built with CGO enabled and target glibc-based
+`linux/amd64` and `linux/arm64` systems. They require glibc 2.17 or newer and
+the system dynamic loader for the target architecture. Alpine/musl Linux is
+not an officially supported runtime target yet; build from source with a musl
+toolchain if you need it. Verify the target with `ldd --version` before
+deployment. Windows archives are native `windows/amd64` executables and do
+not require Go or a C compiler at runtime.
 
 ### Deployment as a service
 
