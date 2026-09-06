@@ -29,3 +29,54 @@ jobs:
       - run: go vet ./...
       - run: go test -race ./...
       - run: go build -o bin/momentum-server ./cmd/server
+
+  windows-service:
+    name: Windows service lifecycle
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build Windows release binary
+        shell: pwsh
+        run: |
+          $env:CGO_ENABLED = '1'
+          go build -trimpath -o momentum-server.exe ./cmd/server
+      - name: Register, health-check, and stop SCM service
+        shell: pwsh
+        env:
+          MOMENTUM_CI_SERVICE: Momentum-CI-${{ github.run_id }}
+          MOMENTUM_CI_INSTALL: ${{ runner.temp }}\Momentum-CI-${{ github.run_id }}\install
+          MOMENTUM_CI_DATA: ${{ runner.temp }}\Momentum-CI-${{ github.run_id }}\data
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $serviceName = $env:MOMENTUM_CI_SERVICE
+          $installDir = $env:MOMENTUM_CI_INSTALL
+          $dataDir = $env:MOMENTUM_CI_DATA
+          $key = 'ci-only-' + [guid]::NewGuid().ToString('N')
+          New-Item -ItemType Directory -Force -Path $installDir, $dataDir | Out-Null
+          try {
+            & .\scripts\packaging\windows\Install-Momentum.ps1 `
+              -BinaryPath (Resolve-Path .\momentum-server.exe) `
+              -InstallDirectory $installDir `
+              -DataDirectory $dataDir `
+              -RegisterService `
+              -ServiceName $serviceName `
+              -EncryptionKey $key
+
+            $ready = $false
+            for ($attempt = 1; $attempt -le 30; $attempt++) {
+              try {
+                $response = Invoke-WebRequest -Uri 'https://localhost:8443/health' -SkipCertificateCheck -UseBasicParsing
+                if ($response.StatusCode -eq 200) { $ready = $true; break }
+              } catch { Start-Sleep -Seconds 1 }
+            }
+            if (-not $ready) { throw 'Momentum Windows service did not become healthy on https://localhost:8443/health' }
+          } finally {
+            if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
+              Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
+              & sc.exe delete $serviceName | Out-Null
+            }
+          }
