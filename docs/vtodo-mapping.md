@@ -117,15 +117,15 @@ This section defines how VTODO properties map to internal task fields.
 
 | VTODO STATUS | Internal Status | Kanban Column | Description |
 |--------------|-----------------|---------------|-------------|
-| `NEEDS-ACTION` | `TODO` | Todo | Task not started |
-| `IN-PROCESS` | `IN_PROGRESS` | In Progress | Task actively being worked on |
-| `COMPLETED` | `DONE` | Done | Task finished |
+| `NEEDS-ACTION` | `NEEDS-ACTION` | Todo | Task not started |
+| `IN-PROCESS` | `IN-PROCESS` | In Progress | Task actively being worked on |
+| `COMPLETED` | `COMPLETED` | Done | Task finished |
 | `CANCELLED` | `CANCELLED` | (archived) | Task abandoned/cancelled |
 
 **Rules**:
 - Default value: `NEEDS-ACTION` (maps to `TODO`)
 - Status transitions are validated:
-  - Valid: `TODO` → `IN_PROGRESS` → `DONE`
+  - Valid: `NEEDS-ACTION` → `IN-PROCESS` → `COMPLETED`
   - Valid: Any status → `CANCELLED`
   - Invalid transitions are rejected with an error
 - When `STATUS` is `COMPLETED`:
@@ -341,7 +341,7 @@ Include when non-null/non-default:
 - `CATEGORIES`: When `tags` array is not empty
 - `DTSTART`: When `startDate` is set
 - `DUE`: When `dueDate` is set
-- `COMPLETED`: When `status` is `DONE` (with UTC timestamp)
+- `COMPLETED`: When `status` is `COMPLETED` (with UTC timestamp)
 - `PERCENT-COMPLETE`: When set and not 0
 - `URL`: When `url` field is set
 - `LOCATION`: When `location` field is set
@@ -364,7 +364,7 @@ These fields are **guaranteed** to round-trip without loss:
 6. **DUE** (dueDate): Preserved with timezone conversion
 7. **PRIORITY**: Preserved with range validation (0-9)
 8. **DTSTART** (startDate): Preserved with timezone conversion
-9. **COMPLETED** (completedDate): Preserved when status is DONE
+9. **COMPLETED** (completedDate): Preserved when status is COMPLETED
 10. **DTSTAMP** (createdDate): Immutable after creation
 11. **LAST-MODIFIED** (modifiedDate): Updated on each change
 12. **SEQUENCE**: Incremented on each change
@@ -431,8 +431,8 @@ All tasks must satisfy these validation rules before being stored or synced:
    - `PERCENT-COMPLETE` must be less than 100 (validation error if 100)
 3. Status transitions must be valid:
    - Any status can transition to `CANCELLED`
-   - `TODO` → `IN_PROGRESS` → `DONE` is the normal flow
-   - Direct `TODO` → `DONE` is allowed (skipping in-progress)
+   - `NEEDS-ACTION` → `IN-PROCESS` → `COMPLETED` is the normal flow
+   - Direct `NEEDS-ACTION` → `COMPLETED` is allowed (skipping in-progress)
 
 ### Import Validation
 
