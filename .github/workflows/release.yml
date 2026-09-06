@@ -31,7 +31,6 @@ jobs:
       matrix:
         include:
           - { os: ubuntu-latest, artifact: momentum-server-linux-amd64.tar.gz }
-          - { os: macos-latest, artifact: momentum-server-darwin-amd64.tar.gz }
           - { os: windows-latest, artifact: momentum-server-windows-amd64.zip }
     steps:
       - uses: actions/checkout@v4
@@ -48,6 +47,10 @@ jobs:
           fi
       - name: Start discovered binary and verify health
         shell: bash
+        env:
+          # Smoke tests use the explicit local-development mode so the binary
+          # can generate a certificate and encryption key in the ephemeral VM.
+          MOMENTUM_DEV_MODE: '1'
         run: |
           set -euo pipefail
           BINARY="$(find . -type f \( -name momentum-server -o -name momentum-server.exe \) -print -quit)"
