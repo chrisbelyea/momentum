@@ -64,9 +64,10 @@ func main() {
 
 	// Initialize encryption
 	if err := crypto.LoadEncryptionKeyFromEnv(); err != nil {
-		log.Printf("Warning: Encryption key not set. Backend credentials will not be encrypted.")
-		log.Printf("Set MOMENTUM_ENCRYPTION_KEY environment variable for production use.")
-		// Initialize with a default key for development (not secure for production)
+		if os.Getenv("MOMENTUM_DEV_MODE") != "1" {
+			log.Fatalf("MOMENTUM_ENCRYPTION_KEY is required (set MOMENTUM_DEV_MODE=1 only for local development): %v", err)
+		}
+		log.Printf("WARNING: MOMENTUM_DEV_MODE=1; using ephemeral development encryption key")
 		if err := crypto.InitializeEncryption("dev-default-key-change-in-production"); err != nil {
 			log.Fatalf("Failed to initialize encryption: %v", err)
 		}
