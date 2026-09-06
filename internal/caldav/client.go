@@ -225,7 +225,15 @@ func (c *Client) ListTodos(ctx context.Context, collectionHref string) ([]Remote
 		if item.Propstat.Prop.ResourceType.Collection != nil || !strings.Contains(strings.ToLower(item.Propstat.Prop.ContentType), "text/calendar") {
 			continue
 		}
-		todo, err := c.GetTodo(ctx, item.Href)
+		// A multistatus href is a URI reference relative to the request URI.
+		// Providers commonly return just "task.ics" for a member of
+		// "/calendar/"; resolving it against the configured discovery root
+		// would incorrectly address "/task.ics".
+		memberHref, err := c.resolveRemoteAgainst(collectionHref, item.Href)
+		if err != nil {
+			return nil, fmt.Errorf("resolve CalDAV member href %q: %w", item.Href, err)
+		}
+		todo, err := c.GetTodo(ctx, memberHref)
 		if err != nil {
 			return nil, err
 		}
@@ -389,17 +397,48 @@ func (c *Client) resolveRemote(raw string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	u, err := url.Parse(raw)
+	u, err := resolveURLReference(base, raw)
 	if err != nil || u.IsAbs() && u.Scheme != "https" || u.User != nil || u.Fragment != "" {
 		return "", fmt.Errorf("invalid external CalDAV href")
-	}
-	if !u.IsAbs() {
-		u = base.ResolveReference(u)
 	}
 	if u.Scheme != base.Scheme || !strings.EqualFold(u.Host, base.Host) {
 		return "", fmt.Errorf("external CalDAV href crosses configured origin")
 	}
 	return u.String(), nil
+}
+
+// resolveRemoteAgainst resolves a multistatus member against the collection
+// request URI, then applies the configured-origin policy. This matters for
+// servers that return a relative href such as "task.ics" from a collection at
+// "/dav/tasks/".
+func (c *Client) resolveRemoteAgainst(baseRaw, raw string) (string, error) {
+	configBase, err := url.Parse(c.config.URL)
+	if err != nil {
+		return "", err
+	}
+	base, err := resolveURLReference(configBase, baseRaw)
+	if err != nil {
+		return "", fmt.Errorf("invalid CalDAV collection href: %w", err)
+	}
+	resolved, err := resolveURLReference(base, raw)
+	if err != nil {
+		return "", fmt.Errorf("invalid CalDAV member href: %w", err)
+	}
+	return c.resolveRemote(resolved.String())
+}
+
+func resolveURLReference(base *url.URL, raw string) (*url.URL, error) {
+	u, err := url.Parse(raw)
+	if err != nil || u.User != nil || u.Fragment != "" {
+		return nil, fmt.Errorf("invalid URL reference")
+	}
+	if u.IsAbs() && u.Scheme != "https" {
+		return nil, fmt.Errorf("URL reference must use HTTPS")
+	}
+	if !u.IsAbs() {
+		u = base.ResolveReference(u)
+	}
+	return u, nil
 }
 
 type multistatus struct {
