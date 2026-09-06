@@ -100,7 +100,7 @@ func main() {
 	backendHandler := backend.NewHandler(backendRepo)
 
 	// Initialize Web handler
-	webHandler := web.NewHandler(taskRepo)
+	webHandler := web.NewHandler(taskRepo, backendRepo)
 
 	// Setup routes
 	mux := http.NewServeMux()
@@ -126,7 +126,8 @@ func main() {
 	// Web UI routes
 	mux.Handle("/", authService.Require(http.HandlerFunc(webHandler.HandleIndex)))
 	mux.Handle("/list", authService.Require(http.HandlerFunc(webHandler.HandleList)))
-	mux.Handle("/api/tasks/", authService.Require(http.HandlerFunc(webHandler.HandleUpdateStatus)))
+	mux.Handle("/api/tasks", authService.Require(http.HandlerFunc(webHandler.HandleTasks)))
+	mux.Handle("/api/tasks/", authService.Require(http.HandlerFunc(webHandler.HandleTasks)))
 
 	// CalDAV routes
 	mux.Handle("/caldav/tasks", authService.Require(http.HandlerFunc(caldavHandler.HandleTasks)))

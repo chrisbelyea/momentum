@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/chrisbelyea/momentum/internal/db"
@@ -32,6 +33,65 @@ func setupTestDB(t *testing.T) *sql.DB {
 	database.Exec("INSERT INTO backends (id, user_id, backend_type, name) VALUES (1, 1, 'internal', 'Test Backend')")
 
 	return database
+}
+
+func TestTaskWorkflowAPI(t *testing.T) {
+	database := setupTestDB(t)
+	defer database.Close()
+	handler := &Handler{taskRepo: db.NewTaskRepository(database)}
+
+	create := httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(`{"title":"Ship UI","backend_id":1}`))
+	created := httptest.NewRecorder()
+	handler.HandleTasks(created, create)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create returned %d: %s", created.Code, created.Body.String())
+	}
+	var task models.Task
+	if err := json.NewDecoder(created.Body).Decode(&task); err != nil || task.ID == 0 {
+		t.Fatalf("invalid created task: %+v (%v)", task, err)
+	}
+
+	update := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/tasks/%d", task.ID), strings.NewReader(`{"title":"Ship UI v2"}`))
+	updated := httptest.NewRecorder()
+	handler.HandleTasks(updated, update)
+	if updated.Code != http.StatusOK {
+		t.Fatalf("update returned %d: %s", updated.Code, updated.Body.String())
+	}
+	if got, _ := handler.taskRepo.Get(task.ID); got == nil || got.Title != "Ship UI v2" {
+		t.Fatalf("update did not persist: %+v", got)
+	}
+
+	deleted := httptest.NewRecorder()
+	handler.HandleTasks(deleted, httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/tasks/%d", task.ID), nil))
+	if deleted.Code != http.StatusNoContent {
+		t.Fatalf("delete returned %d", deleted.Code)
+	}
+	if got, _ := handler.taskRepo.Get(task.ID); got != nil {
+		t.Fatalf("task still exists after delete: %+v", got)
+	}
+}
+
+func TestBackendSelectionUsesURLStateAndOwnership(t *testing.T) {
+	database := setupTestDB(t)
+	defer database.Close()
+	if _, err := database.Exec("INSERT INTO backends (id,user_id,backend_type,name) VALUES (2,1,'internal','Second backend')"); err != nil {
+		t.Fatal(err)
+	}
+	repo := db.NewTaskRepository(database)
+	for _, task := range []*models.Task{{BackendID: 1, Title: "First"}, {BackendID: 2, Title: "Second"}} {
+		if err := repo.Create(task); err != nil {
+			t.Fatal(err)
+		}
+	}
+	handler := NewHandler(repo, db.NewBackendRepository(database))
+	rec := httptest.NewRecorder()
+	handler.HandleIndex(rec, httptest.NewRequest(http.MethodGet, "/?backend_id=2", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("selection returned %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Second") || strings.Contains(rec.Body.String(), "First") {
+		t.Fatalf("URL-selected backend rendered wrong tasks: %s", rec.Body.String())
+	}
 }
 
 func TestUpdateStatus(t *testing.T) {
