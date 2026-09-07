@@ -2,13 +2,13 @@
 
 This document provides an up-to-date assessment of Momentum's implementation progress and outlines the prioritized next steps.
 
-> Last updated: 2026-09-07 (main `4803fe4`)
+> Last updated: 2026-09-07 (main `d52ee45`)
 
 ---
 
 ## Summary
 
-Momentum now has a runnable authenticated server for Windows and Linux. Main includes canonical schema upgrades, secure sessions and ownership checks, embedded web assets, TLS-only serving, CalDAV VTODO JSON/iCalendar task resources, external collection discovery and CRUD, standards-focused Radicale and provider-compatible Nextcloud interoperability checks, executable sync planning/cycles with transactional apply and conflict recovery, incremental provider cursors with live interrupted-sync recovery, per-backend sync limits and operation events, release-binary workflow tests, and native launch/service packaging. Phase 1 still has the open authenticated web workflow issue [#65](https://github.com/chrisbelyea/momentum/issues/65); #67 and #68 are complete for their documented acceptance criteria.
+Momentum now has a runnable authenticated server for Windows and Linux. Main includes canonical schema upgrades, secure sessions and ownership checks, embedded web assets, TLS-only serving, CalDAV VTODO JSON/iCalendar task resources, external collection discovery and CRUD, standards-focused Radicale and provider-compatible Nextcloud interoperability checks, executable sync planning/cycles with transactional apply and conflict recovery, incremental provider cursors with live interrupted-sync recovery, per-backend sync limits and operation events, release-binary workflow tests, and native launch/service packaging. The authenticated web workflow (#65), CalDAV interoperability (#67), and synchronization (#68) are complete for their documented acceptance criteria. The remaining Phase 1 release gate is documentation/license completion (#69) followed by verified publication (#128).
 
 ---
 
@@ -67,20 +67,20 @@ and verification gaps:
 
 | Area | Gap |
 |---|---|
-| **Authentication** | Core registration/login/logout and session ownership are implemented; release-binary checks cover the authenticated task workflow, while richer web-workflow coverage remains in [#65](https://github.com/chrisbelyea/momentum/issues/65). |
+| **Authentication** | Core registration/login/logout, session ownership, and the authenticated browser task workflow are implemented and covered by release/browser checks. |
 | **TLS** | TLS 1.3+ is enforced; development certificates are explicit and production encryption keys are required. |
-| **Web UI** | Board/list views and accessible create/edit/delete/status/backend controls exist; richer field editing, browser-level E2E coverage, and failure/concurrency reconciliation remain in [#65](https://github.com/chrisbelyea/momentum/issues/65). |
+| **Web UI** | Board/list views, accessible create/edit/delete/status/backend controls, rich fields, browser E2E, and failure/concurrency reconciliation are implemented. |
 | **Sync** | Provider-neutral reconciliation cycles, retry/idempotency, RFC 6578 cursors, transactional local application, authenticated conflict listing/detail/recovery, per-backend concurrency/rate limits, structured operation events, and live interrupted-sync recovery are implemented and covered by green Radicale/Nextcloud CI. |
 | **External CalDAV** | Authenticated collection discovery, VTODO CRUD, REPORT lifecycle, a sync adapter, deterministic local compatibility profiles, and green Radicale 3.1.8 plus Nextcloud Tasks 0.17.1 provider-compatible checks are implemented; hosted-service certification remains explicitly out of scope. |
 | **VTODO wire format** | RFC 5545 parser/serializer, canonical persistence, date-only fidelity, provider extension preservation, and fixture coverage are implemented. The JSON/iCalendar boundary is documented in `docs/vtodo-api.md`. |
 | **Credential storage** | No OS keychain integration for clients. |
-| **Release packaging** | Native Linux/Windows launch and service helpers are included in archives, and published prerelease `v0.2.0-rc2` has passed the downloaded Linux amd64 16-check workflow; a stable release remains gated on the open Phase 1 acceptance work. |
+| **Release packaging** | Native Linux/Windows launch and service helpers are included in archives, and published prerelease `v0.2.0-rc2` has passed the downloaded Linux amd64 16-check workflow; the next release is tracked in [#128](https://github.com/chrisbelyea/momentum/issues/128). |
 
 ---
 
 ## Current tracked work (GitHub is authoritative)
 
-See the [Phase 1 recovery program](https://github.com/chrisbelyea/momentum/issues/61) and its current open work: [#65 web workflow](https://github.com/chrisbelyea/momentum/issues/65) and [#69 documentation](https://github.com/chrisbelyea/momentum/issues/69). [#71 post-Phase-1 clients and integrations](https://github.com/chrisbelyea/momentum/issues/71) is intentionally deferred. Completed child issues and platform work are recorded in GitHub, including #59, #62–#68, #70, and #74–#78.
+See the [Phase 1 recovery program](https://github.com/chrisbelyea/momentum/issues/61) and its current open work: [#69 documentation](https://github.com/chrisbelyea/momentum/issues/69) and [#128 release publication](https://github.com/chrisbelyea/momentum/issues/128). [#71 post-Phase-1 clients and integrations](https://github.com/chrisbelyea/momentum/issues/71) is intentionally deferred. Completed child issues and platform work are recorded in GitHub, including #59, #62–#68, #70, and #74–#78.
 
 ---
 

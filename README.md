@@ -27,8 +27,8 @@ The fastest way to move the project forward is to assign open issues to the **Gi
 
 | Priority | Issue | Why first |
 | --- | --- | --- |
-| 1 | [#65 Authenticated web workflow](https://github.com/chrisbelyea/momentum/issues/65) | Remaining review/merge step for the green browser E2E workflow PR |
-| 2 | [#69 Documentation accuracy](https://github.com/chrisbelyea/momentum/issues/69) | Refresh this documentation and verify operational instructions |
+| 1 | [#69 Documentation accuracy](https://github.com/chrisbelyea/momentum/issues/69) | Finalize license/status evidence and close the documentation gate |
+| 2 | [#128 Verified Phase 1 release](https://github.com/chrisbelyea/momentum/issues/128) | Publish and verify the next Windows/Linux/macOS release |
 | 3 | [#71 Post-Phase-1 clients and integrations](https://github.com/chrisbelyea/momentum/issues/71) | Deferred planning work after the Phase 1 release |
 
 Issues [#67](https://github.com/chrisbelyea/momentum/issues/67) and
