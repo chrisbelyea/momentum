@@ -37,17 +37,17 @@ Visit the [Releases page](https://github.com/chrisbelyea/momentum/releases) and 
 Each release also includes a `checksums.txt` file containing SHA-256 checksums for all archives.
 
 The current published release is the prerelease
-[`v0.2.0-rc2`](https://github.com/chrisbelyea/momentum/releases/tag/v0.2.0-rc2).
-It contains Linux amd64/arm64 and Windows amd64 archives; the downloaded Linux
-amd64 archive passed the complete 16-check fresh-database task workflow. Native
-macOS amd64/arm64 release jobs are now green on `main` and will be included by
-the next release workflow run. The release is intentionally not presented as
-the final Phase 1 release while the final documentation/license gate in
-[#69](https://github.com/chrisbelyea/momentum/issues/69) and verified
-publication work in [#128](https://github.com/chrisbelyea/momentum/issues/128)
-remain open. The authenticated web workflow (#65), CalDAV interoperability
-(#67), and reliable synchronization (#68) have passed their documented
-acceptance criteria.
+[`v0.2.0-rc3`](https://github.com/chrisbelyea/momentum/releases/tag/v0.2.0-rc3).
+It contains Linux amd64/arm64, Windows amd64, and native macOS amd64/arm64
+archives. The downloaded Linux amd64 archive passed the complete 16-check
+fresh-database task workflow, and the release workflow passed the corresponding
+Windows and macOS smoke/integration jobs. Phase 1 documentation/license and
+verified-publication gates (#69 and #128) are closed; the release notes document
+the supported platforms, database initialization/upgrades, TLS setup, and
+known limitations. The authenticated web workflow (#65), CalDAV
+interoperability (#67), and reliable synchronization (#68) have passed their
+documented acceptance criteria. Post-Phase-1 native clients and new provider
+integrations are tracked separately in [#71](https://github.com/chrisbelyea/momentum/issues/71).
 
 The archives also include `scripts/packaging/` with the native launch and
 service setup helpers described below.
