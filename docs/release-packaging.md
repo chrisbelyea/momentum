@@ -42,11 +42,12 @@ It contains Linux amd64/arm64 and Windows amd64 archives; the downloaded Linux
 amd64 archive passed the complete 16-check fresh-database task workflow. Native
 macOS amd64/arm64 release jobs are now green on `main` and will be included by
 the next release workflow run. The release is intentionally not presented as
-the final Phase 1 release while the authenticated web workflow in
-[#65](https://github.com/chrisbelyea/momentum/issues/65) and operational
-documentation in [#69](https://github.com/chrisbelyea/momentum/issues/69) remain
-open. CalDAV interoperability (#67) and reliable synchronization (#68) have
-passed their documented acceptance criteria.
+the final Phase 1 release while the final documentation/license gate in
+[#69](https://github.com/chrisbelyea/momentum/issues/69) and verified
+publication work in [#128](https://github.com/chrisbelyea/momentum/issues/128)
+remain open. The authenticated web workflow (#65), CalDAV interoperability
+(#67), and reliable synchronization (#68) have passed their documented
+acceptance criteria.
 
 The archives also include `scripts/packaging/` with the native launch and
 service setup helpers described below.

@@ -19,7 +19,7 @@ The server requires an authenticated session for the board, list, and task API. 
 The authenticated board/list workflow is implemented. Remaining limitations and
 future improvements are:
 
-1. **Browser certification**: The full browser-level board/list, rich-field, failure-recovery, and concurrency workflow is covered by PR [#124](https://github.com/chrisbelyea/momentum/pull/124), which remains the final open Phase 1 web-workflow review item.
+1. **Browser certification**: The full browser-level board/list, rich-field, failure-recovery, and concurrency workflow is covered by merged PR [#124](https://github.com/chrisbelyea/momentum/pull/124) and its green Chromium CI job.
 2. **Router**: Uses manual URL parsing; a dedicated router remains a future maintenance improvement.
 3. **WebSocket support**: Real-time collaborative editing is not claimed; clients refresh or reconcile through the HTTP API.
 
