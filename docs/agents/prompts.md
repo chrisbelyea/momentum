@@ -103,7 +103,7 @@ Follow the conventions in .github/AGENTS.md: branch name feature/release-packagi
 "Review the specification and create Issues with acceptance criteria for the items below. Use labels: type:feature/task/docs/infra and area:*."
 
 ### Migration Authoring
-"Create Liquibase changesets for the described schema changes. Provide forward and rollback, and ensure validate passes."
+"Update the canonical SQLite SQL changelog under internal/db/schema/changelog, regenerate internal/db/schema/init.sql with scripts/db/generate-init-sql.sh, and add or update migration/upgrade tests. Do not create Liquibase or independent DDL sources."
 
 ### PR Review
 "Verify linked Issue, tests, docs updates, and CI. Comment on security, portability, and simplicity."

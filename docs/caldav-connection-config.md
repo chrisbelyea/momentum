@@ -282,7 +282,7 @@ go test ./internal/db -v
 
 - OAuth 2.0 support for CalDAV servers that support it
 - OS keychain integration for client-side credential storage (see [credential-storage.md](credential-storage.md))
-- Scheduled background synchronization and provider-native incremental cursors (see [issue #68](https://github.com/chrisbelyea/momentum/issues/68))
-- Hosted-provider interoperability certification (see [issue #67](https://github.com/chrisbelyea/momentum/issues/67))
+- Scheduled background synchronization (the current release exposes the tested cycle API and provider checkpoints to a future scheduler)
+- Hosted-service certification beyond the pinned provider-compatible Nextcloud CI service
 - Automatic credential rotation
 - Multi-factor authentication support

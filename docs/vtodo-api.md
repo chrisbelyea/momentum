@@ -42,4 +42,7 @@ canonical task or extension store rather than silently dropping it.
 ranges, RFC 5545 escaping/folding, date and timezone forms, and malformed
 components. Provider fixtures in `pkg/vtodo/testdata` cover valid Google- and
 Apple-style extensions plus malformed input. Real-provider interoperability is
-tracked separately in [#67](https://github.com/chrisbelyea/momentum/issues/67); this document does not claim provider certification.
+validated by the standards-focused Radicale and provider-compatible Nextcloud
+Tasks CI jobs linked from [#67](https://github.com/chrisbelyea/momentum/issues/67).
+This document does not claim certification for hosted services such as
+nextcloud.com, Google, or Apple.

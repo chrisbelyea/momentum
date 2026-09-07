@@ -27,11 +27,14 @@ The fastest way to move the project forward is to assign open issues to the **Gi
 
 | Priority | Issue | Why first |
 | --- | --- | --- |
-| 1 | [#65 Authenticated web workflow](https://github.com/chrisbelyea/momentum/issues/65) | Remaining richer field editing, browser E2E, and failure/concurrency coverage |
-| 2 | [#67 CalDAV interoperability](https://github.com/chrisbelyea/momentum/issues/67) | Hosted-provider certification and provider-specific behavior |
-| 3 | [#68 Reliable CalDAV synchronization](https://github.com/chrisbelyea/momentum/issues/68) | Incremental cursors and live-provider interrupted-sync evidence |
-| 4 | [#69 Documentation accuracy](https://github.com/chrisbelyea/momentum/issues/69) | Keep the operational and release instructions truthful |
-| 5 | [#71 Post-Phase-1 clients and integrations](https://github.com/chrisbelyea/momentum/issues/71) | Deferred planning work after the Phase 1 release |
+| 1 | [#65 Authenticated web workflow](https://github.com/chrisbelyea/momentum/issues/65) | Remaining review/merge step for the green browser E2E workflow PR |
+| 2 | [#69 Documentation accuracy](https://github.com/chrisbelyea/momentum/issues/69) | Refresh this documentation and verify operational instructions |
+| 3 | [#71 Post-Phase-1 clients and integrations](https://github.com/chrisbelyea/momentum/issues/71) | Deferred planning work after the Phase 1 release |
+
+Issues [#67](https://github.com/chrisbelyea/momentum/issues/67) and
+[#68](https://github.com/chrisbelyea/momentum/issues/68) are complete for their
+documented Phase 1 acceptance criteria. Hosted-service certification beyond
+the pinned Nextcloud-compatible CI service remains explicitly out of scope.
 
 ### Tips
 - Use the prompts in [docs/agents/prompts.md](docs/agents/prompts.md) for precise instructions when using the Copilot chat interface.

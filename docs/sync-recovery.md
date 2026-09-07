@@ -32,6 +32,7 @@ resolved once, and backend ownership is checked against the authenticated
 session before any evidence is returned or changed.
 
 This is the Phase 1 recovery path. It is currently API-based; no browser
-conflict queue is claimed. Automatic field-level merging, scheduled
-background synchronization, and provider-specific conflict policies remain
-outside this release and are tracked in [#68](https://github.com/chrisbelyea/momentum/issues/68).
+conflict queue is claimed. Automatic field-level merging, scheduled background
+synchronization, and provider-specific conflict policies remain outside this
+release. The tested cycle API and provider cursor checkpoints are available to
+an application-level scheduler in a future operational layer.
