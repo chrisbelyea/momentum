@@ -31,6 +31,7 @@ acknowledgement without choosing either snapshot. A conflict can only be
 resolved once, and backend ownership is checked against the authenticated
 session before any evidence is returned or changed.
 
-This is the Phase 1 recovery path. Automatic field-level merging, scheduled
+This is the Phase 1 recovery path. It is currently API-based; no browser
+conflict queue is claimed. Automatic field-level merging, scheduled
 background synchronization, and provider-specific conflict policies remain
-outside this release and are tracked in issue #68.
+outside this release and are tracked in [#68](https://github.com/chrisbelyea/momentum/issues/68).

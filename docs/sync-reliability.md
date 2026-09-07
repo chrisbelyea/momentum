@@ -33,3 +33,8 @@ cycle succeeds.
 The limiter and observer are process-local controls. A deployment running
 multiple Momentum processes must coordinate provider quotas outside the
 process, or use one scheduler responsible for each backend.
+
+These controls are the reliability slice currently implemented for [#68](https://github.com/chrisbelyea/momentum/issues/68).
+The CalDAV adapter still performs a complete collection listing for each pull;
+provider-native incremental cursor execution and live-provider interrupted-sync
+evidence remain open acceptance work.

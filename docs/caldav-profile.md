@@ -78,6 +78,6 @@ reproducible and credential-free.
 
 The local matrix and Radicale run do not constitute hosted-provider
 certification. They do not prove compatibility with Google, Apple, Nextcloud,
-or any other named service. A real-provider run, including provider-specific
-authentication and discovery behavior, remains required by issue #67 before
-claiming hosted-provider interoperability complete.
+or any other named service. A hosted-provider run, including provider-specific
+authentication and discovery behavior, remains required by [#67](https://github.com/chrisbelyea/momentum/issues/67)
+before claiming hosted-provider interoperability complete.
