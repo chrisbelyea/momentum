@@ -3,7 +3,7 @@
 ## Project Context
 Momentum is a kanban-focused task manager (Go server + future PWA/native clients) that uses CalDAV VTODOs as its default storage backend. It supports multiple backends and targets both SaaS and self-hosted deployments.
 
-- **Language / runtime**: Go 1.24 (module `github.com/chrisbelyea/momentum`)
+- **Language / runtime**: Go 1.25 (module `github.com/chrisbelyea/momentum`)
 - **Key dependencies**: `github.com/mattn/go-sqlite3` (requires CGO), `github.com/google/uuid`
 - **Database**: SQLite (local dev default), PostgreSQL (production); migrations via Liquibase 4.27
 - **Server entry point**: `cmd/server/main.go` — builds to a single executable
