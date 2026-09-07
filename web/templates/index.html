@@ -76,11 +76,22 @@
         .btn-secondary { background: #e0e0e0; color: #333; display: inline-block; }
 
         .task-form { max-width: 700px; margin: 0 auto 20px; padding: 14px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
-        .task-form input, .task-form textarea, .task-form select { padding: 8px; border: 1px solid #ddd; border-radius: 5px; margin-right: 6px; }
+        .task-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+        .task-field { display: flex; flex-direction: column; gap: 4px; }
+        .task-field-wide { grid-column: 1 / -1; }
+        .task-field label { font-size: .85rem; font-weight: 600; color: #444; }
+        .task-form input, .task-form textarea, .task-form select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; }
+        .task-form textarea { min-height: 64px; resize: vertical; font: inherit; }
+        .task-form input:focus, .task-form textarea:focus, .task-form select:focus { outline: 2px solid #1976d2; outline-offset: 1px; }
         .task-actions { margin-top: 8px; display: flex; gap: 6px; }
         .task-actions button { border: 0; border-radius: 4px; padding: 5px 8px; cursor: pointer; }
         .edit-task { background: #e3f2fd; color: #1565c0; }
         .delete-task { background: #ffebee; color: #b71c1c; }
+
+        @media (max-width: 600px) {
+            .task-fields { grid-template-columns: 1fr; }
+            .task-field-wide { grid-column: auto; }
+        }
 
         * {
             margin: 0;
@@ -229,11 +240,49 @@
     </div>
 
     <form id="task-form" class="task-form">
-        <strong>Add task</strong><br>
-        <input name="title" required placeholder="Task title" aria-label="Task title">
-        <select name="backend_id" aria-label="Task backend">
-            {{ range .Backends }}<option value="{{ .ID }}"{{ if eq .ID $.BackendID }} selected{{ end }}>{{ .Name }}</option>{{ end }}
-        </select>
+        <h2>Add task</h2>
+        <div class="task-fields">
+            <div class="task-field task-field-wide">
+                <label for="task-title">Title</label>
+                <input id="task-title" name="title" required maxlength="500" placeholder="Task title" autocomplete="off">
+            </div>
+            <div class="task-field">
+                <label for="task-backend">Backend</label>
+                <select id="task-backend" name="backend_id">
+                    {{ range .Backends }}<option value="{{ .ID }}"{{ if eq .ID $.BackendID }} selected{{ end }}>{{ .Name }}</option>{{ end }}
+                </select>
+            </div>
+            <div class="task-field">
+                <label for="task-status">Status</label>
+                <select id="task-status" name="status">
+                    <option value="NEEDS-ACTION">Todo</option>
+                    <option value="IN-PROCESS">In progress</option>
+                    <option value="COMPLETED">Done</option>
+                    <option value="CANCELLED">Cancelled</option>
+                </select>
+            </div>
+            <div class="task-field task-field-wide">
+                <label for="task-description">Description</label>
+                <textarea id="task-description" name="description" maxlength="10000" placeholder="Optional details"></textarea>
+            </div>
+            <div class="task-field">
+                <label for="task-due">Due date</label>
+                <input id="task-due" name="due_at" type="date">
+            </div>
+            <div class="task-field">
+                <label for="task-priority">Priority</label>
+                <select id="task-priority" name="priority">
+                    <option value="">No priority</option>
+                    <option value="1">1 (highest)</option><option value="2">2</option><option value="3">3</option>
+                    <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+                    <option value="7">7</option><option value="8">8</option><option value="9">9 (lowest)</option>
+                </select>
+            </div>
+            <div class="task-field task-field-wide">
+                <label for="task-tags">Tags</label>
+                <input id="task-tags" name="tags" maxlength="1000" placeholder="Comma-separated tags">
+            </div>
+        </div>
         <div class="task-actions"><button class="btn-primary" type="submit">Create task</button></div>
         <p id="task-form-status" role="status" aria-live="polite"></p>
     </form>
@@ -241,8 +290,42 @@
     <dialog id="edit-dialog" aria-labelledby="edit-dialog-title">
         <form id="edit-form" method="dialog" class="task-form">
             <h2 id="edit-dialog-title">Edit task</h2>
-            <label for="edit-title">Task title</label>
-            <input id="edit-title" name="title" required>
+            <div class="task-fields">
+                <div class="task-field task-field-wide">
+                    <label for="edit-title">Title</label>
+                    <input id="edit-title" name="title" required maxlength="500">
+                </div>
+                <div class="task-field">
+                    <label for="edit-status-select">Status</label>
+                    <select id="edit-status-select" name="status">
+                        <option value="NEEDS-ACTION">Todo</option>
+                        <option value="IN-PROCESS">In progress</option>
+                        <option value="COMPLETED">Done</option>
+                        <option value="CANCELLED">Cancelled</option>
+                    </select>
+                </div>
+                <div class="task-field">
+                    <label for="edit-due">Due date</label>
+                    <input id="edit-due" name="due_at" type="date">
+                </div>
+                <div class="task-field">
+                    <label for="edit-priority">Priority</label>
+                    <select id="edit-priority" name="priority">
+                        <option value="">No priority</option>
+                        <option value="1">1 (highest)</option><option value="2">2</option><option value="3">3</option>
+                        <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+                        <option value="7">7</option><option value="8">8</option><option value="9">9 (lowest)</option>
+                    </select>
+                </div>
+                <div class="task-field task-field-wide">
+                    <label for="edit-description">Description</label>
+                    <textarea id="edit-description" name="description" maxlength="10000" placeholder="Optional details"></textarea>
+                </div>
+                <div class="task-field task-field-wide">
+                    <label for="edit-tags">Tags</label>
+                    <input id="edit-tags" name="tags" maxlength="1000" placeholder="Comma-separated tags">
+                </div>
+            </div>
             <input type="hidden" name="id">
             <div class="task-actions"><button value="cancel" type="button" id="edit-cancel">Cancel</button><button value="save" class="btn-primary" type="submit">Save changes</button></div>
             <p id="edit-status" role="status" aria-live="polite"></p>
@@ -269,7 +352,7 @@
             <div class="column-content" id="todo-column">
                 {{ if .TodoTasks }}
                     {{ range .TodoTasks }}
-                    <div class="task-card" draggable="true" data-task-id="{{ .ID }}">
+                    <div class="task-card" draggable="true" data-task-id="{{ .ID }}" data-status="{{ .Status }}"{{ if .Description }} data-description="{{ .Description }}"{{ end }}{{ if .DueAt }} data-due-at="{{ .DueAt.Format "2006-01-02" }}"{{ end }}{{ if .Priority }} data-priority="{{ .Priority }}"{{ end }}{{ if .TagsJSON }} data-tags="{{ .TagsJSON }}"{{ end }}>
                         <div class="task-title">{{ .Title }}</div>
                         {{ if .Description }}
                         <div class="task-description">{{ .Description }}</div>
@@ -298,7 +381,7 @@
             <div class="column-content" id="in-progress-column">
                 {{ if .InProgressTasks }}
                     {{ range .InProgressTasks }}
-                    <div class="task-card" draggable="true" data-task-id="{{ .ID }}">
+                    <div class="task-card" draggable="true" data-task-id="{{ .ID }}" data-status="{{ .Status }}"{{ if .Description }} data-description="{{ .Description }}"{{ end }}{{ if .DueAt }} data-due-at="{{ .DueAt.Format "2006-01-02" }}"{{ end }}{{ if .Priority }} data-priority="{{ .Priority }}"{{ end }}{{ if .TagsJSON }} data-tags="{{ .TagsJSON }}"{{ end }}>
                         <div class="task-title">{{ .Title }}</div>
                         {{ if .Description }}
                         <div class="task-description">{{ .Description }}</div>
@@ -327,7 +410,7 @@
             <div class="column-content" id="done-column">
                 {{ if .DoneTasks }}
                     {{ range .DoneTasks }}
-                    <div class="task-card" draggable="true" data-task-id="{{ .ID }}">
+                    <div class="task-card" draggable="true" data-task-id="{{ .ID }}" data-status="{{ .Status }}"{{ if .Description }} data-description="{{ .Description }}"{{ end }}{{ if .DueAt }} data-due-at="{{ .DueAt.Format "2006-01-02" }}"{{ end }}{{ if .Priority }} data-priority="{{ .Priority }}"{{ end }}{{ if .TagsJSON }} data-tags="{{ .TagsJSON }}"{{ end }}>
                         <div class="task-title">{{ .Title }}</div>
                         {{ if .Description }}
                         <div class="task-description">{{ .Description }}</div>
@@ -355,10 +438,56 @@
         if (backendSelect) backendSelect.addEventListener('change', () => {
             const url = new URL(location.href); url.searchParams.set('backend_id', backendSelect.value); location.href = url;
         });
+        function tagsFromInput(value) {
+            const seen = new Set();
+            return value.split(',').map(tag => tag.trim()).filter(tag => {
+                if (!tag || seen.has(tag.toLowerCase())) return false;
+                seen.add(tag.toLowerCase());
+                return true;
+            });
+        }
+        function taskPayload(form) {
+            const due = form.elements.due_at.value.trim();
+            const priority = form.elements.priority.value;
+            const description = form.elements.description.value.trim();
+            const tags = tagsFromInput(form.elements.tags.value);
+            const body = {
+                title: form.elements.title.value.trim(),
+                description: description || null,
+                due_at: due ? due + 'T00:00:00.000Z' : null,
+                due_date_only: Boolean(due),
+                priority: priority === '' ? null : Number(priority),
+                tags_json: tags.length ? JSON.stringify(tags) : null,
+            };
+            if (form.elements.status) body.status = form.elements.status.value;
+            if (form.elements.backend_id) body.backend_id = Number(form.elements.backend_id.value);
+            return body;
+        }
+        function validateTaskForm(form, statusNode) {
+            if (!form.elements.title.value.trim()) {
+                statusNode.textContent = 'Title is required.';
+                form.elements.title.focus();
+                return false;
+            }
+            const priority = form.elements.priority.value;
+            if (priority !== '' && (!Number.isInteger(Number(priority)) || Number(priority) < 0 || Number(priority) > 9)) {
+                statusNode.textContent = 'Priority must be between 0 and 9.';
+                form.elements.priority.focus();
+                return false;
+            }
+            statusNode.textContent = '';
+            return true;
+        }
         if (taskForm) taskForm.addEventListener('submit', async (event) => {
             event.preventDefault();
-            const body = { title: taskForm.elements.title.value, backend_id: Number(taskForm.elements.backend_id.value) };
-            const response = await fetch('/api/tasks', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+            if (!validateTaskForm(taskForm, formStatus)) return;
+            let response;
+            try {
+                response = await fetch('/api/tasks', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(taskPayload(taskForm)) });
+            } catch (error) {
+                formStatus.textContent = 'Could not create task. Check your connection and try again.';
+                return;
+            }
             if (!response.ok) { formStatus.textContent = 'Could not create task: ' + await response.text(); return; }
             location.reload();
         });
@@ -366,15 +495,33 @@
         const editForm = document.getElementById('edit-form');
         const editStatus = document.getElementById('edit-status');
         document.querySelectorAll('.edit-task').forEach(button => button.addEventListener('click', async () => {
+            const card = button.closest('.task-card');
             editForm.elements.id.value = button.dataset.taskId;
-            editForm.elements.title.value = button.closest('.task-card').querySelector('.task-title').textContent.trim();
+            editForm.elements.title.value = card.querySelector('.task-title').textContent.trim();
+            editForm.elements.status.value = card.dataset.status || 'NEEDS-ACTION';
+            editForm.elements.description.value = card.dataset.description || '';
+            editForm.elements.due_at.value = card.dataset.dueAt || '';
+            editForm.elements.priority.value = card.dataset.priority || '';
+            try {
+                const tags = card.dataset.tags ? JSON.parse(card.dataset.tags) : [];
+                editForm.elements.tags.value = Array.isArray(tags) ? tags.join(', ') : '';
+            } catch (error) {
+                editForm.elements.tags.value = '';
+            }
             editStatus.textContent = '';
             editDialog.showModal();
         }));
         document.getElementById('edit-cancel').addEventListener('click', () => editDialog.close('cancel'));
         editForm.addEventListener('submit', async event => {
             event.preventDefault();
-            const response = await fetch('/api/tasks/' + editForm.elements.id.value, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({title: editForm.elements.title.value.trim()}) });
+            if (!validateTaskForm(editForm, editStatus)) return;
+            let response;
+            try {
+                response = await fetch('/api/tasks/' + editForm.elements.id.value, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(taskPayload(editForm)) });
+            } catch (error) {
+                editStatus.textContent = 'Could not update task. Check your connection and try again.';
+                return;
+            }
             if (!response.ok) { editStatus.textContent = 'Could not update task: ' + await response.text(); return; }
             editDialog.close(); location.reload();
         });
@@ -474,8 +621,10 @@
             })
             .catch(error => {
                 console.error('Error updating task status:', error);
-                // Revert the UI change by reloading the page
-                alert('Failed to update task status: ' + error.message + '\nThe page will reload to restore the correct state.');
+                // Revert the optimistic move and announce the failure through
+                // the existing live region instead of using an inaccessible
+                // blocking alert dialog.
+                formStatus.textContent = 'Could not update task status: ' + error.message + ' The page will reload to restore the correct state.';
                 location.reload();
             });
         }
