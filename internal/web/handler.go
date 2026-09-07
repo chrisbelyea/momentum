@@ -223,6 +223,10 @@ func (h *Handler) createTask(w http.ResponseWriter, r *http.Request) {
 	if task.Status == "" {
 		task.Status = models.StatusNeedsAction
 	}
+	if err := validateTaskFields(&task); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if !h.taskRepo.BackendOwned(task.BackendID, uid) {
 		http.Error(w, "backend not found", 404)
 		return
@@ -246,7 +250,11 @@ func (h *Handler) updateTask(w http.ResponseWriter, r *http.Request, id int) {
 		http.Error(w, "Task not found", 404)
 		return
 	}
-	var task models.Task
+	// Start from the stored task so this endpoint remains a safe partial update:
+	// fields omitted by older clients are preserved, while an explicit JSON null
+	// can still clear nullable fields such as description, due_at, priority, and
+	// tags_json.
+	task := *old
 	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
 		http.Error(w, "Invalid request body", 400)
 		return
@@ -259,12 +267,50 @@ func (h *Handler) updateTask(w http.ResponseWriter, r *http.Request, id int) {
 	if task.Status == "" {
 		task.Status = old.Status
 	}
+	if err := validateTaskFields(&task); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err := h.taskRepo.UpdateForUser(&task, uid); err != nil {
 		http.Error(w, "Task not found", 404)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(task)
+}
+
+// validateTaskFields enforces the values represented by the browser task
+// editor at the API boundary as well. The repository deliberately remains a
+// general VTODO persistence layer, so validation belongs here rather than in
+// SQL or in a browser-only script.
+func validateTaskFields(task *models.Task) error {
+	validStatuses := map[string]bool{
+		models.StatusNeedsAction: true,
+		models.StatusInProcess:   true,
+		models.StatusCompleted:   true,
+		models.StatusCancelled:   true,
+	}
+	if !validStatuses[task.Status] {
+		return fmt.Errorf("invalid status value")
+	}
+	if task.Priority != nil && (*task.Priority < 0 || *task.Priority > 9) {
+		return fmt.Errorf("priority must be between 0 and 9")
+	}
+	if task.DueDateOnly && task.DueAt == nil {
+		return fmt.Errorf("due_date_only requires due_at")
+	}
+	if task.TagsJSON != nil {
+		var tags []string
+		if err := json.Unmarshal([]byte(*task.TagsJSON), &tags); err != nil {
+			return fmt.Errorf("tags_json must be a JSON array of strings")
+		}
+		for _, tag := range tags {
+			if strings.TrimSpace(tag) == "" {
+				return fmt.Errorf("tags_json cannot contain empty tags")
+			}
+		}
+	}
+	return nil
 }
 
 func (h *Handler) deleteTask(w http.ResponseWriter, r *http.Request, id int) {

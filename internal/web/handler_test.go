@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/chrisbelyea/momentum/internal/db"
 	"github.com/chrisbelyea/momentum/internal/models"
@@ -68,6 +69,120 @@ func TestTaskWorkflowAPI(t *testing.T) {
 	}
 	if got, _ := handler.taskRepo.Get(task.ID); got != nil {
 		t.Fatalf("task still exists after delete: %+v", got)
+	}
+}
+
+func TestTaskWorkflowAPIRoundTripsRichFieldsAndPreservesPartialUpdates(t *testing.T) {
+	database := setupTestDB(t)
+	defer database.Close()
+	handler := &Handler{taskRepo: db.NewTaskRepository(database)}
+
+	createBody := `{"title":"Plan launch","backend_id":1,"description":"Write the launch checklist","status":"IN-PROCESS","priority":3,"due_at":"2026-12-31T00:00:00Z","due_date_only":true,"tags_json":"[\"launch\",\"urgent\"]"}`
+	created := httptest.NewRecorder()
+	handler.HandleTasks(created, httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(createBody)))
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create returned %d: %s", created.Code, created.Body.String())
+	}
+	var task models.Task
+	if err := json.NewDecoder(created.Body).Decode(&task); err != nil {
+		t.Fatalf("decode created task: %v", err)
+	}
+	if task.Description == nil || *task.Description != "Write the launch checklist" || task.Priority == nil || *task.Priority != 3 {
+		t.Fatalf("rich fields missing from created task: %+v", task)
+	}
+	if task.DueAt == nil || task.DueAt.Format("2006-01-02") != "2026-12-31" || !task.DueDateOnly {
+		t.Fatalf("due date missing from created task: %+v", task)
+	}
+	if task.TagsJSON == nil || *task.TagsJSON != `["launch","urgent"]` {
+		t.Fatalf("tags missing from created task: %+v", task.TagsJSON)
+	}
+
+	// Older clients send only a title. The update endpoint must not erase rich
+	// fields that a client did not include in its partial update.
+	updated := httptest.NewRecorder()
+	handler.HandleTasks(updated, httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/tasks/%d", task.ID), strings.NewReader(`{"title":"Plan launch v2"}`)))
+	if updated.Code != http.StatusOK {
+		t.Fatalf("partial update returned %d: %s", updated.Code, updated.Body.String())
+	}
+	got, err := handler.taskRepo.Get(task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || got.Title != "Plan launch v2" || got.Description == nil || *got.Description != "Write the launch checklist" || got.Priority == nil || *got.Priority != 3 || got.DueAt == nil || got.TagsJSON == nil {
+		t.Fatalf("partial update erased rich fields: %+v", got)
+	}
+
+	// Explicit null values clear optional editor fields.
+	cleared := httptest.NewRecorder()
+	handler.HandleTasks(cleared, httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/tasks/%d", task.ID), strings.NewReader(`{"title":"Plan launch final","description":null,"priority":null,"due_at":null,"due_date_only":false,"tags_json":null}`)))
+	if cleared.Code != http.StatusOK {
+		t.Fatalf("clear update returned %d: %s", cleared.Code, cleared.Body.String())
+	}
+	got, err = handler.taskRepo.Get(task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Description != nil || got.Priority != nil || got.DueAt != nil || got.DueDateOnly || got.TagsJSON != nil {
+		t.Fatalf("explicit nulls did not clear rich fields: %+v", got)
+	}
+}
+
+func TestTaskWorkflowAPIValidatesRichFields(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "priority", body: `{"title":"Bad priority","backend_id":1,"priority":10}`, want: "priority"},
+		{name: "status", body: `{"title":"Bad status","backend_id":1,"status":"UNKNOWN"}`, want: "status"},
+		{name: "tags", body: `{"title":"Bad tags","backend_id":1,"tags_json":"not-json"}`, want: "tags_json"},
+		{name: "date-only", body: `{"title":"Missing date","backend_id":1,"due_date_only":true}`, want: "due_date_only"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			database := setupTestDB(t)
+			defer database.Close()
+			handler := &Handler{taskRepo: db.NewTaskRepository(database)}
+			rec := httptest.NewRecorder()
+			handler.HandleTasks(rec, httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(test.body)))
+			if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), test.want) {
+				t.Fatalf("expected 400 mentioning %q, got %d: %s", test.want, rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestBoardRendersAccessibleRichTaskEditor(t *testing.T) {
+	database := setupTestDB(t)
+	defer database.Close()
+	description := "Review launch checklist"
+	priority := 2
+	due := time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)
+	tags := `["launch","urgent"]`
+	task := &models.Task{BackendID: 1, Title: "Release task", Description: &description, Priority: &priority, DueAt: &due, DueDateOnly: true, TagsJSON: &tags, Status: models.StatusNeedsAction}
+	repo := db.NewTaskRepository(database)
+	if err := repo.Create(task); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := NewHandler(repo, db.NewBackendRepository(database))
+	rec := httptest.NewRecorder()
+	handler.HandleIndex(rec, httptest.NewRequest(http.MethodGet, "/?backend_id=1", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("board returned %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, required := range []string{
+		`id="task-description"`, `id="task-due"`, `id="task-priority"`, `id="task-tags"`,
+		`id="edit-description"`, `id="edit-due"`, `id="edit-priority"`, `id="edit-tags"`,
+		`data-description="Review launch checklist"`, `data-due-at="2026-12-31"`, `data-priority="2"`,
+		`description: description || null`, `due_date_only: Boolean(due)`, `tags_json: tags.length ? JSON.stringify(tags) : null`,
+	} {
+		if !strings.Contains(body, required) {
+			t.Errorf("board is missing rich editor invariant %q", required)
+		}
+	}
+	if strings.Contains(body, "alert(") {
+		t.Fatal("board mutations must announce errors through ARIA live regions, not alert()")
 	}
 }
 
