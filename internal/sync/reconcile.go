@@ -43,6 +43,7 @@ type EntityMapping struct {
 	BackendID      int
 	TaskID         *int
 	RemoteUID      string
+	RemoteHref     string
 	RemoteETag     string
 	RemoteSequence *int
 	LastPulledAt   *time.Time
@@ -89,6 +90,7 @@ func Plan(input ReconcileInput) (PlanResult, error) {
 	}
 
 	mappingByUID := make(map[string]*EntityMapping, len(input.Mappings))
+	mappingByHref := make(map[string]*EntityMapping, len(input.Mappings))
 	mappedTaskIDs := make(map[int]bool, len(input.Mappings))
 	for i := range input.Mappings {
 		mapping := &input.Mappings[i]
@@ -110,9 +112,25 @@ func Plan(input ReconcileInput) (PlanResult, error) {
 			}
 		}
 		mappingByUID[mapping.RemoteUID] = mapping
+		if mapping.RemoteHref != "" {
+			mappingByHref[mapping.RemoteHref] = mapping
+		}
 	}
 
 	remoteByUID := make(map[string]*RemoteEntity, len(input.Pull.Entities))
+	for _, href := range input.Pull.DeletedHrefs {
+		mapping := mappingByHref[href]
+		if mapping == nil {
+			// A deletion can race the first import, or the mapping may have
+			// been compacted. There is no safe canonical UID to delete.
+			continue
+		}
+		remoteByUID[mapping.RemoteUID] = &RemoteEntity{
+			RemoteUID:  mapping.RemoteUID,
+			RemoteHref: href,
+			Deleted:    true,
+		}
+	}
 	for i := range input.Pull.Entities {
 		remote := &input.Pull.Entities[i]
 		if remote.RemoteUID == "" {
@@ -174,7 +192,7 @@ func Plan(input ReconcileInput) (PlanResult, error) {
 		}
 	}
 
-	if !input.Pull.HasMore {
+	if !input.Pull.HasMore && !input.Pull.Incremental {
 		ids := make([]int, 0, len(localByID))
 		for id := range localByID {
 			ids = append(ids, id)

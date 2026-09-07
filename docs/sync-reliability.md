@@ -34,7 +34,25 @@ The limiter and observer are process-local controls. A deployment running
 multiple Momentum processes must coordinate provider quotas outside the
 process, or use one scheduler responsible for each backend.
 
-These controls are the reliability slice currently implemented for [#68](https://github.com/chrisbelyea/momentum/issues/68).
-The CalDAV adapter still performs a complete collection listing for each pull;
-provider-native incremental cursor execution and live-provider interrupted-sync
-evidence remain open acceptance work.
+## Incremental CalDAV pulls
+
+The CalDAV adapter uses the RFC 6578 `sync-collection` REPORT when a provider
+supports it. The opaque response token is returned as `PullResult.NextCursor`
+and must be persisted with the same transaction as the page's task and entity
+changes. A subsequent cycle passes that token back to the adapter. Deleted
+resources are reported by href and resolved against the durable mapping before
+the planner emits a local deletion, so a partial or incremental page never
+causes an unrelated task to be removed.
+
+Providers that reject the REPORT can still be used for an initial import via
+the existing Depth-1 PROPFIND listing. That fallback intentionally does not
+advance a cursor; subsequent runs retry the standard REPORT. If a provider
+returns HTTP 403 or 409 for a non-empty token, the token has expired and the
+caller must schedule a fresh import rather than applying an incomplete delta.
+
+These controls and the cursor/resume tests are the reliability slices currently
+implemented for [#68](https://github.com/chrisbelyea/momentum/issues/68). The
+Radicale and Nextcloud CI lifecycle jobs also run the real provider adapter
+through an interrupted pull, SQLite checkpoint restart, and replayed update;
+the retry must apply the provider change from the durable cursor. The lifecycle
+jobs continue to certify complete CRUD interoperability separately.

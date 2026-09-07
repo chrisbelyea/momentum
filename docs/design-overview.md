@@ -105,7 +105,7 @@ graph TB
   - Backend configurations and credentials (encrypted)
   - Sync state and checkpoints
   - Task metadata and mappings
-- Migrations managed via Liquibase for cross-DB compatibility
+- SQLite schema changes managed by the canonical SQL changelog with generated embedded initialization; the retired Liquibase/development DDL sources are not used by the release binary
 
 ### 2. Client Components
 

@@ -72,6 +72,23 @@ func TestPlanHandlesRemoteDeletionAndNewEntities(t *testing.T) {
 	}
 }
 
+func TestPlanResolvesIncrementalDeletionByDurableHref(t *testing.T) {
+	baseline := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+	task := &models.Task{ID: 1, BackendID: 5, UID: "deleted", Title: "gone", UpdatedAt: ptrTime(baseline)}
+	result, err := Plan(ReconcileInput{
+		BackendID: 5,
+		Local:     []*models.Task{task},
+		Mappings:  []EntityMapping{{BackendID: 5, TaskID: ptrInt(1), RemoteUID: "deleted", RemoteHref: "/dav/tasks/deleted.ics", RemoteETag: `"one"`, LastPulledAt: ptrTime(baseline)}},
+		Pull:      PullResult{DeletedHrefs: []string{"/dav/tasks/deleted.ics"}, Incremental: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Actions) != 1 || result.Actions[0].Kind != ActionDeleteLocal || result.Actions[0].Remote == nil || result.Actions[0].Remote.RemoteUID != "deleted" {
+		t.Fatalf("incremental deletion was not resolved through mapping: %#v", result.Actions)
+	}
+}
+
 func TestPlanRejectsDuplicateRemoteUID(t *testing.T) {
 	_, err := Plan(ReconcileInput{BackendID: 1, Pull: PullResult{Entities: []RemoteEntity{{RemoteUID: "same"}, {RemoteUID: "same"}}}})
 	if err == nil {

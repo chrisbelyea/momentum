@@ -75,6 +75,40 @@ jobs:
       - name: Run authenticated VTODO lifecycle against Radicale
         run: scripts/caldav/radicale-interop.sh
 
+  caldav-nextcloud-interop:
+    name: CalDAV interoperability (Nextcloud Tasks)
+    runs-on: ubuntu-latest
+    services:
+      nextcloud:
+        # Keep the provider-compatible implementation pinned. The Tasks app
+        # release used below supports Nextcloud 31 through 33.
+        image: nextcloud:31.0.8-apache@sha256:92bc503ea0c19789f402b0469ecfb8df1ffea81e2bf90a45bba39063a626aa00
+        env:
+          SQLITE_DATABASE: nextcloud
+          NEXTCLOUD_ADMIN_USER: alice
+          NEXTCLOUD_ADMIN_PASSWORD: secret
+          NEXTCLOUD_TRUSTED_DOMAINS: 127.0.0.1 localhost
+        ports:
+          - 8080:80
+        options: >-
+          --health-cmd "php -r 'exit((int)!@file_get_contents(\"http://localhost/status.php\"));'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go mod download
+      - name: Run authenticated VTODO lifecycle against Nextcloud Tasks
+        env:
+          NEXTCLOUD_BASE_URL: http://127.0.0.1:8080
+          NEXTCLOUD_USER: alice
+          NEXTCLOUD_PASSWORD: secret
+        run: scripts/caldav/nextcloud-interop.sh
+
   windows-service:
     name: Windows service lifecycle
     runs-on: windows-latest

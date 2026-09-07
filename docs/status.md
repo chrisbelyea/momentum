@@ -2,13 +2,13 @@
 
 This document provides an up-to-date assessment of Momentum's implementation progress and outlines the prioritized next steps.
 
-> Last updated: 2026-09-06 (main `c8cc197`)
+> Last updated: 2026-09-07 (main `4803fe4`)
 
 ---
 
 ## Summary
 
-Momentum now has a runnable authenticated server for Windows and Linux. Main includes canonical schema upgrades, secure sessions and ownership checks, embedded web assets, TLS-only serving, CalDAV VTODO JSON/iCalendar task resources, external collection discovery and CRUD, a standards-focused Radicale interoperability check, executable sync planning/cycles with transactional apply and conflict recovery, per-backend sync limits and operation events, release-binary workflow tests, and native launch/service packaging. Phase 1 is not complete: richer web editing and browser-level workflow coverage remain open in [#65](https://github.com/chrisbelyea/momentum/issues/65), hosted-provider certification remains open in [#67](https://github.com/chrisbelyea/momentum/issues/67), and incremental provider cursor execution plus live-provider two-way/interrupted-sync evidence remain open in [#68](https://github.com/chrisbelyea/momentum/issues/68).
+Momentum now has a runnable authenticated server for Windows and Linux. Main includes canonical schema upgrades, secure sessions and ownership checks, embedded web assets, TLS-only serving, CalDAV VTODO JSON/iCalendar task resources, external collection discovery and CRUD, standards-focused Radicale and provider-compatible Nextcloud interoperability checks, executable sync planning/cycles with transactional apply and conflict recovery, incremental provider cursors with live interrupted-sync recovery, per-backend sync limits and operation events, release-binary workflow tests, and native launch/service packaging. Phase 1 still has the open authenticated web workflow issue [#65](https://github.com/chrisbelyea/momentum/issues/65); #67 and #68 are complete for their documented acceptance criteria.
 
 ---
 
@@ -17,20 +17,24 @@ Momentum now has a runnable authenticated server for Windows and Linux. Main inc
 ### Infrastructure & CI
 - GitHub repository setup with branch protections, CODEOWNERS, issue/PR templates, and Copilot agent instructions.
 - CI workflow (`ci.yml`) running on every push and PR:
-  - Liquibase validation and migration against both SQLite and PostgreSQL.
+  - Canonical SQLite changelog generation and drift validation.
   - Go build, test (with race detector and coverage), and binary artifact upload.
   - Repository structure validation.
-- Liquibase migrations validated and documented.
+- Canonical SQLite changelog and generated embedded SQL are validated and documented; retired Liquibase/development DDL sources are not used by the release binary.
 
-### Database Schema (Liquibase)
-All core tables are defined and pass `liquibase validate` on SQLite and PostgreSQL:
+### Database Schema (canonical SQLite changelog)
+All core tables are defined in the canonical SQL changelog and verified by the
+generated-embedded-SQL drift check:
 
 | Table | Purpose |
 |---|---|
 | `users` | Momentum user accounts |
 | `backends` | Per-user task backend configurations |
 | `tasks` | Task storage (VTODO fields) |
-| `sync_state` | Per-backend incremental sync checkpoints |
+| `sync_checkpoints` | Per-backend incremental sync cursors and retry state |
+| `sync_entities` | Canonical task to provider-entity mappings |
+| `sync_operations` | Provider operation outcomes and retry evidence |
+| `sync_conflicts` | Retained local/remote conflict snapshots |
 | `credentials` | Hashed credentials per user/type |
 | `sessions` | Active user sessions with expiry |
 
@@ -66,8 +70,8 @@ and verification gaps:
 | **Authentication** | Core registration/login/logout and session ownership are implemented; release-binary checks cover the authenticated task workflow, while richer web-workflow coverage remains in [#65](https://github.com/chrisbelyea/momentum/issues/65). |
 | **TLS** | TLS 1.3+ is enforced; development certificates are explicit and production encryption keys are required. |
 | **Web UI** | Board/list views and accessible create/edit/delete/status/backend controls exist; richer field editing, browser-level E2E coverage, and failure/concurrency reconciliation remain in [#65](https://github.com/chrisbelyea/momentum/issues/65). |
-| **Sync** | Provider-neutral reconciliation cycles, retry/idempotency, a CalDAV adapter, transactional local application, authenticated conflict listing/detail/recovery, per-backend concurrency/rate limits, and operation events are implemented; incremental provider cursor execution and live-provider two-way/interrupted-sync evidence remain in [#68](https://github.com/chrisbelyea/momentum/issues/68). |
-| **External CalDAV** | Authenticated collection discovery, VTODO CRUD, REPORT lifecycle, a sync adapter, deterministic local compatibility profiles, and a green Radicale 3.1.8 TLS/Basic-auth lifecycle check are implemented; hosted-provider certification and provider-specific authentication/discovery evidence remain in [#67](https://github.com/chrisbelyea/momentum/issues/67). |
+| **Sync** | Provider-neutral reconciliation cycles, retry/idempotency, RFC 6578 cursors, transactional local application, authenticated conflict listing/detail/recovery, per-backend concurrency/rate limits, structured operation events, and live interrupted-sync recovery are implemented and covered by green Radicale/Nextcloud CI. |
+| **External CalDAV** | Authenticated collection discovery, VTODO CRUD, REPORT lifecycle, a sync adapter, deterministic local compatibility profiles, and green Radicale 3.1.8 plus Nextcloud Tasks 0.17.1 provider-compatible checks are implemented; hosted-service certification remains explicitly out of scope. |
 | **VTODO wire format** | RFC 5545 parser/serializer, canonical persistence, date-only fidelity, provider extension preservation, and fixture coverage are implemented. The JSON/iCalendar boundary is documented in `docs/vtodo-api.md`. |
 | **Credential storage** | No OS keychain integration for clients. |
 | **Release packaging** | Native Linux/Windows launch and service helpers are included in archives, and published prerelease `v0.2.0-rc2` has passed the downloaded Linux amd64 16-check workflow; a stable release remains gated on the open Phase 1 acceptance work. |
@@ -76,7 +80,7 @@ and verification gaps:
 
 ## Current tracked work (GitHub is authoritative)
 
-See the [Phase 1 recovery program](https://github.com/chrisbelyea/momentum/issues/61) and its current open work: [#65 web workflow](https://github.com/chrisbelyea/momentum/issues/65), [#67 CalDAV interoperability](https://github.com/chrisbelyea/momentum/issues/67), and [#68 synchronization](https://github.com/chrisbelyea/momentum/issues/68). [#69 documentation](https://github.com/chrisbelyea/momentum/issues/69) tracks this status refresh; [#71 post-Phase-1 clients and integrations](https://github.com/chrisbelyea/momentum/issues/71) is intentionally deferred. Completed child issues and platform work are recorded in GitHub, including #59, #62–#64, #66, #70, and #74–#78.
+See the [Phase 1 recovery program](https://github.com/chrisbelyea/momentum/issues/61) and its current open work: [#65 web workflow](https://github.com/chrisbelyea/momentum/issues/65) and [#69 documentation](https://github.com/chrisbelyea/momentum/issues/69). [#71 post-Phase-1 clients and integrations](https://github.com/chrisbelyea/momentum/issues/71) is intentionally deferred. Completed child issues and platform work are recorded in GitHub, including #59, #62–#68, #70, and #74–#78.
 
 ---
 
@@ -123,9 +127,9 @@ Required before any public or self-hosted release.
 
 ## Architecture Gaps to Resolve Before Feature Completion
 
-1. **Provider certification and sync operations** — `pkg/vtodo`, the CalDAV adapter, transactional local action application, conflict/recovery API, per-backend reliability controls, and a Radicale standards-server run are implemented; remaining work is hosted-provider certification in [#67](https://github.com/chrisbelyea/momentum/issues/67) plus incremental provider cursor execution and live-provider two-way/interrupted-sync evidence in [#68](https://github.com/chrisbelyea/momentum/issues/68).
+1. **Provider certification and sync operations** — `pkg/vtodo`, the CalDAV adapter, transactional local action application, conflict/recovery API, per-backend reliability controls, Radicale standards-server coverage, provider-compatible Nextcloud coverage, and live cursor/restart evidence are implemented. Hosted-service certification remains out of scope.
 2. **Backend abstraction layer** — The provider-neutral `internal/sync.Adapter` interface and capability model now separate canonical tasks from CalDAV transport. A broader application-level backend CRUD interface remains future architecture work and is not required for the current release.
-3. **Sync orchestration** — Provider-neutral `Runner`/`RunCycle` orchestration and transactional application now exist. Scheduled background synchronization and provider-native cursor integration remain open work in [#68](https://github.com/chrisbelyea/momentum/issues/68).
+3. **Sync orchestration** — Provider-neutral `Runner`/`RunCycle` orchestration, transactional application, and provider-native cursor integration now exist. Scheduled background synchronization remains a future operational layer; the current release exercises synchronization through the tested cycle API.
 
 ---
 

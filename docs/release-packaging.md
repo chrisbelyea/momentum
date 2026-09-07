@@ -42,9 +42,11 @@ It contains Linux amd64/arm64 and Windows amd64 archives; the downloaded Linux
 amd64 archive passed the complete 16-check fresh-database task workflow. Native
 macOS amd64/arm64 release jobs are now green on `main` and will be included by
 the next release workflow run. The release is intentionally not presented as
-the final Phase 1 release while [#67](https://github.com/chrisbelyea/momentum/issues/67)
-and [#68](https://github.com/chrisbelyea/momentum/issues/68) retain open
-acceptance work.
+the final Phase 1 release while the authenticated web workflow in
+[#65](https://github.com/chrisbelyea/momentum/issues/65) and operational
+documentation in [#69](https://github.com/chrisbelyea/momentum/issues/69) remain
+open. CalDAV interoperability (#67) and reliable synchronization (#68) have
+passed their documented acceptance criteria.
 
 The archives also include `scripts/packaging/` with the native launch and
 service setup helpers described below.
@@ -112,7 +114,7 @@ fresh-database workflow before publication.
 
 | Tool | Version | Notes |
 |------|---------|-------|
-| Go | 1.24+ | CGO required (`gcc`/`clang` must be on `PATH`) |
+| Go | 1.25+ | CGO required (`gcc`/`clang` must be on `PATH`) |
 | `gcc` or `clang` | any modern | Required by `go-sqlite3` CGO driver |
 | `git` | any | Used to derive the version string |
 | `tar` + checksum tool | standard | `tar` is bundled on Linux/macOS; use `sha256sum` on Linux, or `shasum -a 256` / `openssl dgst -sha256` on macOS (or `gsha256sum` via Homebrew coreutils); Windows users can use WSL |
@@ -120,7 +122,7 @@ fresh-database workflow before publication.
 Verify your environment:
 
 ```bash
-go version        # go1.24.x linux/amd64 (or similar)
+go version        # go1.25.x linux/amd64 (or similar)
 gcc --version     # gcc 13.x.x ...
 git --version     # git version 2.x.x
 ```
