@@ -112,7 +112,7 @@ fresh-database workflow before publication.
 
 | Tool | Version | Notes |
 |------|---------|-------|
-| Go | 1.24+ | CGO required (`gcc`/`clang` must be on `PATH`) |
+| Go | 1.25+ | CGO required (`gcc`/`clang` must be on `PATH`) |
 | `gcc` or `clang` | any modern | Required by `go-sqlite3` CGO driver |
 | `git` | any | Used to derive the version string |
 | `tar` + checksum tool | standard | `tar` is bundled on Linux/macOS; use `sha256sum` on Linux, or `shasum -a 256` / `openssl dgst -sha256` on macOS (or `gsha256sum` via Homebrew coreutils); Windows users can use WSL |
@@ -120,7 +120,7 @@ fresh-database workflow before publication.
 Verify your environment:
 
 ```bash
-go version        # go1.24.x linux/amd64 (or similar)
+go version        # go1.25.x linux/amd64 (or similar)
 gcc --version     # gcc 13.x.x ...
 git --version     # git version 2.x.x
 ```
