@@ -25,6 +25,9 @@ const (
 // It uses ~/.momentum/dev-certs/ with a fallback to ./dev-certs/ if the home directory
 // cannot be determined.
 func DevCertDir() string {
+	if dir := os.Getenv("MOMENTUM_DEV_CERT_DIR"); dir != "" {
+		return dir
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return filepath.Join(".", ".momentum", "dev-certs")

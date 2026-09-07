@@ -150,6 +150,16 @@ jobs:
           done
           echo 'health endpoint did not become ready'; exit 1
 
+      - name: Exercise packaged launcher
+        if: runner.os != 'Windows'
+        run: scripts/packaging/linux/test-launcher.sh "$(find . -type f -name 'momentum-server' -print -quit)"
+      - name: Exercise packaged launcher
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $binary = (Get-ChildItem -Recurse -File -Filter momentum-server.exe | Select-Object -First 1).FullName
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/packaging/windows/Test-Launcher.ps1 -BinaryPath $binary
+
   integration-test:
     name: Release workflow integration (${{ matrix.os }})
     needs: smoke-test
