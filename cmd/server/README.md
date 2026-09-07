@@ -6,6 +6,8 @@ Internal CalDAV server for Momentum task management.
 
 - **VTODO CRUD Operations**: Create, Read, Update, and Delete tasks locally
 - **RESTful API**: Simple HTTP endpoints for task management
+- **Authentication**: Registration, login, logout, session ownership, and route protection
+- **TLS**: TLS 1.3 minimum with auto-generated development certificates or operator-supplied certificates
 - **SQLite Storage**: Lightweight, file-based database (PostgreSQL support via existing schema)
 - **Single Executable**: Compiles to a single binary with no external dependencies
 
@@ -38,7 +40,7 @@ warning — this is expected for auto-generated certificates).
 1. Start the server (it initializes or upgrades the canonical SQLite schema automatically):
 
 ```bash
-# Default: uses momentum.db in current directory, listens on https://localhost:8443
+# Default: uses the OS user data directory, listens on https://localhost:8443
 ./bin/momentum-server
 
 # Custom configuration via environment variables
@@ -62,13 +64,14 @@ certificate setup instructions.
 
 The server is configured via environment variables:
 
-- `DB_PATH`: Path to SQLite database file (default: `momentum.db`)
+- `DB_PATH`: Path to SQLite database file (default: OS user data directory)
 - `PORT`: HTTPS server port (default: `8443`)
-- `TLS_CERT`: Path to TLS certificate PEM file (optional; auto-generated if not set)
-- `TLS_KEY`: Path to TLS private key PEM file (optional; auto-generated if not set)
+- `TLS_CERT`: Path to TLS certificate PEM file (optional; auto-generated for development if not set)
+- `TLS_KEY`: Path to TLS private key PEM file (optional; auto-generated for development if not set)
 - `HTTP_REDIRECT_PORT`: If set, starts an HTTP server that redirects to HTTPS
 - `EXTERNAL_HOST`: Public hostname used for HTTP→HTTPS redirect URLs (default: `localhost:<PORT>`)
-- `MOMENTUM_ENCRYPTION_KEY`: Encryption key for backend credentials (recommended for production)
+- `MOMENTUM_ENCRYPTION_KEY`: Encryption key for backend credentials (required in production)
+- `MOMENTUM_DEV_MODE`: Set to `1` only for local development/integration tests when no encryption key is available
 
 ## API Endpoints
 
@@ -180,11 +183,11 @@ Valid task status values (from VTODO specification):
 ## Example Usage
 
 ```bash
-# Create a backend entry first (you'll need to do this via database or future admin API)
-# For now, use integer IDs for backend_id
+# Authenticate first and send the returned session cookie with protected routes.
+# The examples below use integer backend/task IDs and https://localhost:8443.
 
 # Create a task
-curl -X POST http://localhost:8080/caldav/tasks \
+curl -k -X POST https://localhost:8443/caldav/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "backend_id": 1,
@@ -194,13 +197,13 @@ curl -X POST http://localhost:8080/caldav/tasks \
   }'
 
 # List tasks
-curl "http://localhost:8080/caldav/tasks?backend_id=1"
+curl -k "https://localhost:8443/caldav/tasks?backend_id=1"
 
 # Get a task
-curl http://localhost:8080/caldav/tasks/{task-id}
+curl -k https://localhost:8443/caldav/tasks/{task-id}
 
 # Update a task
-curl -X PUT http://localhost:8080/caldav/tasks/{task-id} \
+curl -k -X PUT https://localhost:8443/caldav/tasks/{task-id} \
   -H "Content-Type: application/json" \
   -d '{
     "backend_id": 1,
@@ -210,7 +213,7 @@ curl -X PUT http://localhost:8080/caldav/tasks/{task-id} \
   }'
 
 # Delete a task
-curl -X DELETE http://localhost:8080/caldav/tasks/{task-id}
+curl -k -X DELETE https://localhost:8443/caldav/tasks/{task-id}
 ```
 
 ## Architecture
@@ -221,7 +224,7 @@ The server follows a layered architecture:
 - **internal/caldav**: HTTP handlers and CalDAV protocol logic
 - **internal/db**: Database repository layer
 - **internal/models**: Data models and domain logic
-- **pkg/vtodo**: VTODO parsing and generation (future)
+- **pkg/vtodo**: RFC 5545-safe VTODO parsing, validation, and generation
 
 ## Testing
 
@@ -246,15 +249,12 @@ go test ./... -v
 - Use the existing `models.Task` struct to maintain consistency with the database schema
 - Follow Go standard project layout conventions
 
-### Future Enhancements
+### Remaining Work
 
-- [ ] Full CalDAV protocol support (PROPFIND, REPORT, etc.)
-- [ ] VTODO serialization/deserialization in `pkg/vtodo`
-- [ ] Authentication and authorization
-- [ ] Sync orchestration with external backends
-- [ ] WebDAV compliance tests
-- [ ] TLS support
-- [ ] Metrics and observability
+- [ ] Hosted-provider CalDAV certification and provider-specific discovery/authentication
+- [ ] Provider-native incremental cursor execution and live-provider interrupted-sync evidence
+- [ ] Browser-level web workflow tests and richer task-field editing
+- [ ] Scheduled background synchronization and browser conflict queue UI
 
 ## References
 

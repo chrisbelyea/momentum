@@ -36,6 +36,16 @@ Visit the [Releases page](https://github.com/chrisbelyea/momentum/releases) and 
 
 Each release also includes a `checksums.txt` file containing SHA-256 checksums for all archives.
 
+The current published release is the prerelease
+[`v0.2.0-rc2`](https://github.com/chrisbelyea/momentum/releases/tag/v0.2.0-rc2).
+It contains Linux amd64/arm64 and Windows amd64 archives; the downloaded Linux
+amd64 archive passed the complete 16-check fresh-database task workflow. Native
+macOS amd64/arm64 release jobs are now green on `main` and will be included by
+the next release workflow run. The release is intentionally not presented as
+the final Phase 1 release while [#67](https://github.com/chrisbelyea/momentum/issues/67)
+and [#68](https://github.com/chrisbelyea/momentum/issues/68) retain open
+acceptance work.
+
 The archives also include `scripts/packaging/` with the native launch and
 service setup helpers described below.
 
@@ -175,7 +185,7 @@ At runtime the server reads configuration from environment variables:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DB_PATH` | OS user config directory / `Momentum/momentum.db` | Path to the SQLite database file. On Linux this is typically `~/.config/Momentum/momentum.db`; on Windows it is typically `%AppData%\\Momentum\\momentum.db`. |
-| `PORT` | `8080` | TCP port to listen on |
+| `PORT` | `8443` | HTTPS TCP port to listen on |
 | `MOMENTUM_ENCRYPTION_KEY` | *(required in production)* | AES encryption key for stored credentials; the server exits when absent unless explicit `MOMENTUM_DEV_MODE=1` is set |
 
 For production deployments set `MOMENTUM_ENCRYPTION_KEY` to a securely generated random value. `MOMENTUM_DEV_MODE=1` is only for local development and integration tests.
@@ -241,7 +251,7 @@ path, service name, and production encryption key in the SCM service
 environment. Never use `MOMENTUM_DEV_MODE=1` for a service exposed beyond local
 development.
 
-The service and launcher both listen on port 8080 by default. The service uses
+The service and launcher both listen on HTTPS port 8443 by default. The service uses
 the installer-selected data directory; use the launcher when a custom `PORT`
 or `DB_PATH` is required.
 
@@ -274,7 +284,7 @@ After=network.target
 [Service]
 ExecStart=/usr/local/bin/momentum-server
 Environment="DB_PATH=/var/lib/momentum/momentum.db"
-Environment="PORT=8080"
+Environment="PORT=8443"
 Environment="MOMENTUM_ENCRYPTION_KEY=<your-key>"
 WorkingDirectory=/usr/local/share/momentum
 Restart=on-failure
@@ -312,7 +322,7 @@ web/
     index.html      # Kanban board template (Go html/template)
   static/
     manifest.json   # PWA manifest (name, icons, display mode)
-    icons/          # App icons (192×192 and 512×512 PNG) — add before shipping
+    icons/          # App icons (192×192 and 512×512 PNG)
 ```
 
 ### Quick package (current tree)
@@ -347,8 +357,12 @@ A browser will offer "Add to Home Screen" / install prompt when:
 
 - [x] `manifest.json` is served at `/static/manifest.json`
 - [x] `<link rel="manifest">` is present in the HTML
-- [ ] App icons (192×192 and 512×512 PNG) are added to `web/static/icons/` and listed in `manifest.json` (**required** for full installability; the `icons` array in `manifest.json` is intentionally empty until icons are created)
+- [x] App icons (192×192 and 512×512 PNG) are included in `web/static/` and listed in `manifest.json`
 - [ ] The server is accessed over HTTPS (required in production; `localhost` is exempt)
+
+The repository and release-binary checks verify the manifest, icons, and
+same-origin static-asset service worker. Browser-level installability remains
+unverified; see [the documented PWA scope](pwa.md).
 
 ---
 

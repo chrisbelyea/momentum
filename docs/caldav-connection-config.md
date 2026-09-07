@@ -1,6 +1,9 @@
 # External CalDAV Connection Configuration
 
 This document describes how to configure and use external CalDAV server connections in Momentum.
+All `/backends` routes require an authenticated Momentum session. The examples
+show request shapes; add the session cookie returned by `/auth/login` when
+calling them.
 
 ## Overview
 
@@ -24,16 +27,17 @@ export MOMENTUM_ENCRYPTION_KEY="your-strong-random-key-here"
 ```
 
 **Development:**
-If no encryption key is set, the server will use a default development key (not secure for production).
+Set `MOMENTUM_DEV_MODE=1` only for local development or integration tests when
+no key is available. Production startup fails without an explicit key.
 
 ## API Endpoints
 
 ### List Backends
 ```
-GET /backends?user_id={user_id}
+GET /backends
 ```
 
-Returns all configured backends for a user.
+Returns all configured backends owned by the authenticated user.
 
 ### Get Backend
 ```
@@ -48,7 +52,6 @@ POST /backends
 Content-Type: application/json
 
 {
-  "user_id": "user-123",
   "backend_type": "external_caldav",
   "name": "My CalDAV Server",
   "config": {
@@ -67,7 +70,6 @@ PUT /backends/{backend_id}
 Content-Type: application/json
 
 {
-  "user_id": "user-123",
   "backend_type": "external_caldav",
   "name": "Updated Name",
   "config": {
@@ -194,28 +196,25 @@ Only for testing or development with self-signed certificates:
 
 ## Database Schema
 
-Backend configurations are stored in the `backends` table:
+Backend configurations use integer SQLite-generated IDs and are owned by the
+user identified by the authenticated session. Configuration is encrypted at
+rest with AES-256-GCM. Do not create or alter the tables manually; the release
+binary initializes and upgrades the canonical schema described in
+[docs/database-schema.md](database-schema.md).
 
-```sql
-CREATE TABLE backends (
-    id VARCHAR(36) PRIMARY KEY,
-    user_id VARCHAR(36) NOT NULL,
-    backend_type VARCHAR(50) NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    config_encrypted TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-```
+The canonical table definition is maintained in
+[internal/db/schema/changelog](../internal/db/schema/changelog), generated
+into the embedded initializer, and applied automatically by the server.
 
-The `config_encrypted` field stores the JSON-serialized configuration encrypted with AES-256-GCM.
+The encrypted configuration is managed by the backend repository and is never
+returned in API responses.
 
 ## Environment Variables
 
 - `MOMENTUM_ENCRYPTION_KEY`: Required for production. Used to encrypt/decrypt backend credentials.
-- `DB_PATH`: Database file path (default: `momentum.db`)
-- `PORT`: HTTP server port (default: `8080`)
+- `DB_PATH`: Database file path (default: the OS user data directory)
+- `PORT`: HTTPS server port (default: `8443`)
+- `TLS_CERT`, `TLS_KEY`: Optional certificate/key paths; development certificates are generated when omitted
 
 ## Example Usage
 
@@ -223,10 +222,9 @@ The `config_encrypted` field stores the JSON-serialized configuration encrypted 
 
 1. Create a backend:
 ```bash
-curl -X POST http://localhost:8080/backends \
+curl -k -X POST https://localhost:8443/backends \
   -H "Content-Type: application/json" \
   -d '{
-    "user_id": "user-123",
     "backend_type": "external_caldav",
     "name": "My CalDAV",
     "config": {
@@ -239,12 +237,12 @@ curl -X POST http://localhost:8080/backends \
 
 2. List backends:
 ```bash
-curl http://localhost:8080/backends?user_id=user-123
+curl -k https://localhost:8443/backends
 ```
 
 3. Validate connection:
 ```bash
-curl -X POST http://localhost:8080/backends/validate \
+curl -k -X POST https://localhost:8443/backends/validate \
   -H "Content-Type: application/json" \
   -d '{
     "backend_type": "external_caldav",
@@ -284,6 +282,7 @@ go test ./internal/db -v
 
 - OAuth 2.0 support for CalDAV servers that support it
 - OS keychain integration for client-side credential storage (see [credential-storage.md](credential-storage.md))
-- Connection pooling and retry logic
+- Scheduled background synchronization and provider-native incremental cursors (see [issue #68](https://github.com/chrisbelyea/momentum/issues/68))
+- Hosted-provider interoperability certification (see [issue #67](https://github.com/chrisbelyea/momentum/issues/67))
 - Automatic credential rotation
 - Multi-factor authentication support

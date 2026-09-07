@@ -27,12 +27,11 @@ The fastest way to move the project forward is to assign open issues to the **Gi
 
 | Priority | Issue | Why first |
 | --- | --- | --- |
-| 1 | [#11 TLS-only defaults & setup docs](https://github.com/chrisbelyea/momentum/issues/11) | Spec requires TLS 1.3+; server currently accepts plain HTTP |
-| 2 | [#9 Web kanban scaffold](https://github.com/chrisbelyea/momentum/issues/9) | Primary user-facing feature |
-| 3 | [#10 List view with filter/sort](https://github.com/chrisbelyea/momentum/issues/10) | Complements the kanban board |
-| 4 | [#8 External CalDAV connection](https://github.com/chrisbelyea/momentum/issues/8) | Enables multi-backend value prop |
-| 5 | [#12 Credential storage policy](https://github.com/chrisbelyea/momentum/issues/12) | Required before any client ships |
-| 6 | [#15 Release packaging plan](https://github.com/chrisbelyea/momentum/issues/15) | Required before public/self-hosted release |
+| 1 | [#65 Authenticated web workflow](https://github.com/chrisbelyea/momentum/issues/65) | Remaining richer field editing, browser E2E, and failure/concurrency coverage |
+| 2 | [#67 CalDAV interoperability](https://github.com/chrisbelyea/momentum/issues/67) | Hosted-provider certification and provider-specific behavior |
+| 3 | [#68 Reliable CalDAV synchronization](https://github.com/chrisbelyea/momentum/issues/68) | Incremental cursors and live-provider interrupted-sync evidence |
+| 4 | [#69 Documentation accuracy](https://github.com/chrisbelyea/momentum/issues/69) | Keep the operational and release instructions truthful |
+| 5 | [#71 Post-Phase-1 clients and integrations](https://github.com/chrisbelyea/momentum/issues/71) | Deferred planning work after the Phase 1 release |
 
 ### Tips
 - Use the prompts in [docs/agents/prompts.md](docs/agents/prompts.md) for precise instructions when using the Copilot chat interface.
@@ -57,6 +56,6 @@ export TLS_KEY=path/to/key.pem
 ```
 
 ## CI/CD and Tooling (Overview)
-- Database migrations: Liquibase (recommended) or Flyway.
-- Initial CI: linting, unit/integration tests, security checks.
-- Packaging plans: single-executable server, PWA build, native client artifacts.
+- Database schema: canonical SQL changelog with generated embedded initialization; see [docs/database-schema.md](docs/database-schema.md).
+- CI: schema drift validation, unit/integration tests, release-binary workflow checks, and platform lifecycle checks.
+- Packaging: single-executable server, embedded PWA assets, Linux/Windows helpers, and native macOS release artifacts.
