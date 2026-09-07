@@ -2,6 +2,7 @@ package caldav
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	syncengine "github.com/chrisbelyea/momentum/internal/sync"
@@ -23,23 +24,51 @@ func NewSyncAdapter(client *Client, collectionHref string) (*SyncAdapter, error)
 }
 
 func (a *SyncAdapter) Capabilities() syncengine.Capabilities {
-	return syncengine.Capabilities(syncengine.CapabilityPull | syncengine.CapabilityPush | syncengine.CapabilityDelete | syncengine.CapabilityETag)
+	return syncengine.Capabilities(syncengine.CapabilityPull | syncengine.CapabilityIncrementalPull | syncengine.CapabilityPush | syncengine.CapabilityDelete | syncengine.CapabilityETag)
 }
 
-func (a *SyncAdapter) Pull(ctx context.Context, _ string) (syncengine.PullResult, error) {
-	todos, err := a.client.ListTodos(ctx, a.collection)
+func (a *SyncAdapter) Pull(ctx context.Context, cursor string) (syncengine.PullResult, error) {
+	changeSet, err := a.client.ListTodosSince(ctx, a.collection, cursor)
+	if err != nil {
+		if cursor != "" || !errors.Is(err, ErrIncrementalPullUnsupported) {
+			return syncengine.PullResult{}, err
+		}
+		// Some older servers only implement Depth-1 PROPFIND. It is safe as
+		// an initial import, but it deliberately does not claim a cursor; a
+		// later run will try REPORT again instead of advancing fake state.
+		todos, listErr := a.client.ListTodos(ctx, a.collection)
+		if listErr != nil {
+			return syncengine.PullResult{}, listErr
+		}
+		entities, convertErr := entitiesFromTodos(todos)
+		if convertErr != nil {
+			return syncengine.PullResult{}, convertErr
+		}
+		return syncengine.PullResult{Entities: entities}, nil
+	}
+	entities, err := entitiesFromTodos(changeSet.Todos)
 	if err != nil {
 		return syncengine.PullResult{}, err
 	}
+	return syncengine.PullResult{
+		Entities:     entities,
+		DeletedHrefs: changeSet.DeletedHrefs,
+		NextCursor:   changeSet.NextToken,
+		HasMore:      changeSet.HasMore,
+		Incremental:  cursor != "",
+	}, nil
+}
+
+func entitiesFromTodos(todos []RemoteTodo) ([]syncengine.RemoteEntity, error) {
 	entities := make([]syncengine.RemoteEntity, 0, len(todos))
 	for _, remote := range todos {
 		if remote.Todo == nil || remote.Todo.UID == "" {
-			return syncengine.PullResult{}, fmt.Errorf("CalDAV resource %q has no UID", remote.Href)
+			return nil, fmt.Errorf("CalDAV resource %q has no UID", remote.Href)
 		}
 		task := taskFromTodo(remote.Todo)
 		entities = append(entities, syncengine.RemoteEntity{Task: task, RemoteUID: remote.Todo.UID, RemoteHref: remote.Href, ETag: remote.ETag})
 	}
-	return syncengine.PullResult{Entities: entities}, nil
+	return entities, nil
 }
 
 func (a *SyncAdapter) Push(ctx context.Context, entity syncengine.RemoteEntity) (syncengine.PushResult, error) {

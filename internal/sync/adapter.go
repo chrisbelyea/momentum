@@ -38,9 +38,18 @@ type RemoteEntity struct {
 }
 
 type PullResult struct {
-	Entities   []RemoteEntity
-	NextCursor string
-	HasMore    bool
+	Entities []RemoteEntity
+	// DeletedHrefs contains provider resource hrefs removed since the supplied
+	// cursor. Hrefs are used instead of UIDs because a sync-collection report
+	// cannot read the deleted resource's VTODO body. The planner resolves them
+	// against durable entity mappings before producing delete actions.
+	DeletedHrefs []string
+	NextCursor   string
+	HasMore      bool
+	// Incremental distinguishes a change-set page from a complete collection
+	// snapshot. A non-incremental, complete pull may safely infer deletions
+	// from entities absent from the page; an incremental pull must not.
+	Incremental bool
 }
 
 type PushResult struct {
