@@ -2,7 +2,7 @@
 
 This document provides an up-to-date assessment of Momentum's implementation progress and outlines the prioritized next steps.
 
-> Last updated: 2026-09-06 (main `1b95e2f`)
+> Last updated: 2026-09-06 (main `c8cc197`)
 
 ---
 
