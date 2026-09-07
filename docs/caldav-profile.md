@@ -76,8 +76,20 @@ authentication, creates a VTODO collection, and runs
 the documented profile against Radicale's implementation, while remaining
 reproducible and credential-free.
 
-The local matrix and Radicale run do not constitute hosted-provider
-certification. They do not prove compatibility with Google, Apple, Nextcloud,
-or any other named service. A hosted-provider run, including provider-specific
-authentication and discovery behavior, remains required by [#67](https://github.com/chrisbelyea/momentum/issues/67)
-before claiming hosted-provider interoperability complete.
+CI also runs `scripts/caldav/nextcloud-interop.sh` against the pinned
+`nextcloud:31.0.8-apache` image (manifest digest
+`sha256:92bc503ea0c19789f402b0469ecfb8df1ffea81e2bf90a45bba39063a626aa00`).
+The job installs the pinned Nextcloud Tasks `0.17.1` release, creates a fresh
+task list through `occ`, and runs the same authenticated
+discovery/list/create/read/update/delete lifecycle through a local TLS proxy.
+This exercises a common provider-compatible VTODO implementation and its
+provider-specific `/remote.php/dav/calendars/<user>/` discovery path without
+requiring a hosted account or credentials. Tasks `0.17.1` supports Nextcloud
+31 through 33.
+
+The local matrix, Radicale run, and Nextcloud-compatible run are reproducible
+interoperability evidence, not hosted-provider certification. They do not
+prove compatibility with nextcloud.com, Google, Apple, or another hosted
+service whose authentication, proxy, and deployment configuration may differ.
+Those hosted-service results must be reported separately if credentials and a
+maintained test account become available.
