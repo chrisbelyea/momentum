@@ -352,7 +352,7 @@
             <div class="column-content" id="todo-column">
                 {{ if .TodoTasks }}
                     {{ range .TodoTasks }}
-                    <div class="task-card" draggable="true" data-task-id="{{ .ID }}" data-status="{{ .Status }}"{{ if .Description }} data-description="{{ .Description }}"{{ end }}{{ if .DueAt }} data-due-at="{{ .DueAt.Format "2006-01-02" }}"{{ end }}{{ if .Priority }} data-priority="{{ .Priority }}"{{ end }}{{ if .TagsJSON }} data-tags="{{ .TagsJSON }}"{{ end }}>
+                    <div class="task-card" draggable="true" data-task-id="{{ .ID }}" data-status="{{ .Status }}"{{ if .UpdatedAt }} data-version="{{ .UpdatedAt.Format "2006-01-02T15:04:05.999999999Z07:00" }}"{{ end }}{{ if .Description }} data-description="{{ .Description }}"{{ end }}{{ if .DueAt }} data-due-at="{{ .DueAt.Format "2006-01-02" }}"{{ end }}{{ if .Priority }} data-priority="{{ .Priority }}"{{ end }}{{ if .TagsJSON }} data-tags="{{ .TagsJSON }}"{{ end }}>
                         <div class="task-title">{{ .Title }}</div>
                         {{ if .Description }}
                         <div class="task-description">{{ .Description }}</div>
@@ -381,7 +381,7 @@
             <div class="column-content" id="in-progress-column">
                 {{ if .InProgressTasks }}
                     {{ range .InProgressTasks }}
-                    <div class="task-card" draggable="true" data-task-id="{{ .ID }}" data-status="{{ .Status }}"{{ if .Description }} data-description="{{ .Description }}"{{ end }}{{ if .DueAt }} data-due-at="{{ .DueAt.Format "2006-01-02" }}"{{ end }}{{ if .Priority }} data-priority="{{ .Priority }}"{{ end }}{{ if .TagsJSON }} data-tags="{{ .TagsJSON }}"{{ end }}>
+                    <div class="task-card" draggable="true" data-task-id="{{ .ID }}" data-status="{{ .Status }}"{{ if .UpdatedAt }} data-version="{{ .UpdatedAt.Format "2006-01-02T15:04:05.999999999Z07:00" }}"{{ end }}{{ if .Description }} data-description="{{ .Description }}"{{ end }}{{ if .DueAt }} data-due-at="{{ .DueAt.Format "2006-01-02" }}"{{ end }}{{ if .Priority }} data-priority="{{ .Priority }}"{{ end }}{{ if .TagsJSON }} data-tags="{{ .TagsJSON }}"{{ end }}>
                         <div class="task-title">{{ .Title }}</div>
                         {{ if .Description }}
                         <div class="task-description">{{ .Description }}</div>
@@ -410,7 +410,7 @@
             <div class="column-content" id="done-column">
                 {{ if .DoneTasks }}
                     {{ range .DoneTasks }}
-                    <div class="task-card" draggable="true" data-task-id="{{ .ID }}" data-status="{{ .Status }}"{{ if .Description }} data-description="{{ .Description }}"{{ end }}{{ if .DueAt }} data-due-at="{{ .DueAt.Format "2006-01-02" }}"{{ end }}{{ if .Priority }} data-priority="{{ .Priority }}"{{ end }}{{ if .TagsJSON }} data-tags="{{ .TagsJSON }}"{{ end }}>
+                    <div class="task-card" draggable="true" data-task-id="{{ .ID }}" data-status="{{ .Status }}"{{ if .UpdatedAt }} data-version="{{ .UpdatedAt.Format "2006-01-02T15:04:05.999999999Z07:00" }}"{{ end }}{{ if .Description }} data-description="{{ .Description }}"{{ end }}{{ if .DueAt }} data-due-at="{{ .DueAt.Format "2006-01-02" }}"{{ end }}{{ if .Priority }} data-priority="{{ .Priority }}"{{ end }}{{ if .TagsJSON }} data-tags="{{ .TagsJSON }}"{{ end }}>
                         <div class="task-title">{{ .Title }}</div>
                         {{ if .Description }}
                         <div class="task-description">{{ .Description }}</div>
@@ -463,6 +463,19 @@
             if (form.elements.backend_id) body.backend_id = Number(form.elements.backend_id.value);
             return body;
         }
+        function mutationHeaders(version) {
+            const headers = {'Content-Type':'application/json'};
+            if (version) headers['If-Match'] = '"' + version + '"';
+            return headers;
+        }
+        function announceAfterReload(message) {
+            sessionStorage.setItem('momentum-reconcile-message', message);
+            location.reload();
+        }
+        function announceConflict(statusNode) {
+            statusNode.textContent = 'This task changed elsewhere. Reloading to show the latest version.';
+            announceAfterReload(statusNode.textContent);
+        }
         function validateTaskForm(form, statusNode) {
             if (!form.elements.title.value.trim()) {
                 statusNode.textContent = 'Title is required.';
@@ -483,7 +496,7 @@
             if (!validateTaskForm(taskForm, formStatus)) return;
             let response;
             try {
-                response = await fetch('/api/tasks', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(taskPayload(taskForm)) });
+                response = await fetch('/api/tasks', { method: 'POST', headers: mutationHeaders(), body: JSON.stringify(taskPayload(taskForm)) });
             } catch (error) {
                 formStatus.textContent = 'Could not create task. Check your connection and try again.';
                 return;
@@ -497,6 +510,7 @@
         document.querySelectorAll('.edit-task').forEach(button => button.addEventListener('click', async () => {
             const card = button.closest('.task-card');
             editForm.elements.id.value = button.dataset.taskId;
+            editForm.dataset.version = card.dataset.version || '';
             editForm.elements.title.value = card.querySelector('.task-title').textContent.trim();
             editForm.elements.status.value = card.dataset.status || 'NEEDS-ACTION';
             editForm.elements.description.value = card.dataset.description || '';
@@ -517,16 +531,24 @@
             if (!validateTaskForm(editForm, editStatus)) return;
             let response;
             try {
-                response = await fetch('/api/tasks/' + editForm.elements.id.value, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(taskPayload(editForm)) });
+                response = await fetch('/api/tasks/' + editForm.elements.id.value, { method: 'PUT', headers: mutationHeaders(editForm.dataset.version), body: JSON.stringify(taskPayload(editForm)) });
             } catch (error) {
                 editStatus.textContent = 'Could not update task. Check your connection and try again.';
                 return;
             }
+            if (response.status === 409) { announceConflict(editStatus); return; }
             if (!response.ok) { editStatus.textContent = 'Could not update task: ' + await response.text(); return; }
             editDialog.close(); location.reload();
         });
         document.querySelectorAll('.delete-task').forEach(button => button.addEventListener('click', async () => {
-            const response = await fetch('/api/tasks/' + button.dataset.taskId, { method: 'DELETE' });
+            let response;
+            try {
+                response = await fetch('/api/tasks/' + button.dataset.taskId, { method: 'DELETE', headers: mutationHeaders(button.closest('.task-card').dataset.version) });
+            } catch (error) {
+                formStatus.textContent = 'Could not delete task. Check your connection and try again.';
+                return;
+            }
+            if (response.status === 409) { announceConflict(formStatus); return; }
             if (!response.ok) { formStatus.textContent = 'Could not delete task: ' + await response.text(); return; }
             location.reload();
         }));
@@ -601,11 +623,9 @@
         }
 
         function updateTaskStatus(taskId, newStatus) {
-            fetch(`/api/tasks/${taskId}/status`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                fetch(`/api/tasks/${taskId}/status`, {
+                    method: 'PATCH',
+                    headers: mutationHeaders(draggedElement.dataset.version),
                 body: JSON.stringify({ status: newStatus })
             })
             .then(response => {
@@ -624,8 +644,7 @@
                 // Revert the optimistic move and announce the failure through
                 // the existing live region instead of using an inaccessible
                 // blocking alert dialog.
-                formStatus.textContent = 'Could not update task status: ' + error.message + ' The page will reload to restore the correct state.';
-                location.reload();
+                announceAfterReload('Could not update task status: ' + error.message + ' The page was reloaded to restore the correct state.');
             });
         }
 
@@ -661,6 +680,14 @@
         }
     </script>
     <script>
+        window.addEventListener('load', function () {
+            const message = sessionStorage.getItem('momentum-reconcile-message');
+            if (message) {
+                sessionStorage.removeItem('momentum-reconcile-message');
+                const statusNode = document.getElementById('task-form-status');
+                if (statusNode) statusNode.textContent = message;
+            }
+        });
         // The service worker caches only public static assets; authenticated
         // pages and API responses always continue to use the network.
         if ('serviceWorker' in navigator) {

@@ -300,6 +300,62 @@ func (r *TaskRepository) Update(task *models.Task) error {
 	return nil
 }
 
+// UpdateIfUnchanged updates a task only when its persisted updated_at value
+// still matches expected. This is the storage boundary for browser/device
+// optimistic concurrency; the comparison and mutation happen in one SQL
+// statement so a second writer cannot slip between a read and the update.
+func (r *TaskRepository) UpdateIfUnchanged(task *models.Task, expected time.Time) error {
+	now := time.Now()
+	task.UpdatedAt = &now
+
+	query := `
+		UPDATE tasks
+		SET backend_id = ?, uid = ?, external_id = ?, title = ?, description = ?,
+		    status = ?, priority = ?, due_at = ?, due_date_only = ?, start_at = ?, start_date_only = ?, completed_at = ?,
+		    last_modified = ?, sequence = ?, percent_complete = ?, tags_json = ?,
+		    related_to_json = ?, url = ?, location = ?, extra_json = ?, updated_at = ?
+		WHERE id = ? AND updated_at = ?
+	`
+
+	result, err := r.db.Exec(
+		query,
+		task.BackendID,
+		task.UID,
+		task.ExternalID,
+		task.Title,
+		task.Description,
+		task.Status,
+		task.Priority,
+		task.DueAt,
+		task.DueDateOnly,
+		task.StartAt,
+		task.StartDateOnly,
+		task.CompletedAt,
+		task.LastModified,
+		task.Sequence,
+		task.PercentComplete,
+		task.TagsJSON,
+		task.RelatedToJSON,
+		task.URL,
+		task.Location,
+		task.ExtraJSON,
+		task.UpdatedAt,
+		task.ID,
+		expected,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update task conditionally: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get conditional update rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrTaskVersionConflict
+	}
+	return nil
+}
+
 // Delete deletes a task by ID
 func (r *TaskRepository) Delete(id int) error {
 	query := `DELETE FROM tasks WHERE id = ?`
@@ -318,5 +374,23 @@ func (r *TaskRepository) Delete(id int) error {
 		return ErrNotFound
 	}
 
+	return nil
+}
+
+// DeleteIfUnchanged deletes a task only when its persisted updated_at value
+// still matches expected. It prevents a stale browser from deleting a newer
+// change made by another device.
+func (r *TaskRepository) DeleteIfUnchanged(id int, expected time.Time) error {
+	result, err := r.db.Exec(`DELETE FROM tasks WHERE id = ? AND updated_at = ?`, id, expected)
+	if err != nil {
+		return fmt.Errorf("failed to conditionally delete task: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get conditional delete rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrTaskVersionConflict
+	}
 	return nil
 }

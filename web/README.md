@@ -5,12 +5,16 @@ This directory contains the web-based kanban board UI for Momentum.
 ## Features
 
 - **Three-column layout**: Todo, In Progress, Done
-- **Drag-and-drop**: Move tasks between columns using HTML5 Drag and Drop API
+- **Accessible task controls**: Create, edit, delete, and change status with keyboard-friendly form controls; drag-and-drop remains an optional shortcut
+- **Rich task fields**: Edit title, description, status, due date, priority, and tags
+- **Backend selection**: Choose an owned backend from the board; backend and list filter state is represented in shareable URLs
 - **Persistent state**: All changes are saved to the database and persist across page reloads
 - **Responsive design**: Works on desktop and mobile devices
-- **Real-time updates**: Status changes are immediately reflected in the UI
+- **Accessible feedback**: Mutation errors and stale concurrent edits are announced through ARIA live regions and reconciled with server state
 
-## Known Limitations & Future Improvements
+## Current scope
+
+The server requires an authenticated session for the board, list, and task API. Each task mutation may include an `If-Match` version from the rendered task card. If another device changes the task first, the server returns `409 Conflict`; the browser announces the conflict and reloads the authoritative board instead of silently overwriting the newer change. Failed optimistic status moves are likewise reloaded from the server.
 
 The authenticated board/list workflow is implemented. Remaining limitations and
 future improvements are:
@@ -19,6 +23,10 @@ future improvements are:
 2. **Router**: Uses manual URL parsing; a dedicated router remains a future maintenance improvement.
 3. **WebSocket support**: Real-time collaborative editing is not claimed; clients refresh or reconcile through the HTTP API.
 
+The historical scaffold notes above are superseded by the authenticated,
+accessible workflow described in `## Current scope`; live push updates remain
+outside the current release scope.
+
 ## Architecture
 
 ### Template Structure
@@ -26,8 +34,10 @@ future improvements are:
 
 ### API Endpoints
 - `GET /` - Render the kanban board
-- `GET /api/tasks` - List authenticated-user tasks for the selected backend
+- `GET /list` - Render the filtered/sorted list view
 - `POST /api/tasks` - Create a task
+- `PUT /api/tasks/{id}` - Update task fields
+- `GET /api/tasks` - List authenticated-user tasks for the selected backend
 - `PATCH /api/tasks/{id}` - Edit task fields
 - `DELETE /api/tasks/{id}` - Delete a task
 - `PATCH /api/tasks/{id}/status` - Update task status
