@@ -48,6 +48,7 @@ func (e SyncEntity) Mapping() syncengine.EntityMapping {
 		BackendID:      e.BackendID,
 		TaskID:         e.TaskID,
 		RemoteUID:      e.RemoteUID,
+		RemoteHref:     e.RemoteHref,
 		RemoteETag:     e.RemoteETag,
 		RemoteSequence: e.RemoteSequence,
 		LastPulledAt:   e.LastPulledAt,

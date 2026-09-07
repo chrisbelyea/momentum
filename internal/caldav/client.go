@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -22,6 +23,26 @@ import (
 )
 
 const maxCalDAVResponseBytes = 2 << 20
+
+// ErrIncrementalPullUnsupported indicates that a provider does not implement
+// RFC 6578 sync-collection REPORTs. Callers may use a complete PROPFIND for an
+// initial import, but must not pretend that a complete listing is a durable
+// incremental cursor for later pulls.
+var ErrIncrementalPullUnsupported = errors.New("CalDAV incremental pull is unsupported")
+
+// ErrInvalidSyncToken indicates that a provider discarded the cursor. The
+// caller must schedule a fresh import rather than silently applying an
+// incomplete change set.
+var ErrInvalidSyncToken = errors.New("CalDAV sync token is invalid")
+
+// SyncCollectionResult is one RFC 6578 change-set page. Deleted resources are
+// represented by href because their VTODO body is no longer available.
+type SyncCollectionResult struct {
+	Todos        []RemoteTodo
+	DeletedHrefs []string
+	NextToken    string
+	HasMore      bool
+}
 
 // Collection describes a VTODO-capable CalDAV collection discovered from a
 // server. Href is an absolute URL safe to pass to the CRUD methods below.
@@ -242,6 +263,90 @@ func (c *Client) ListTodos(ctx context.Context, collectionHref string) ([]Remote
 	return todos, nil
 }
 
+// ListTodosSince requests an RFC 6578 sync-collection report. An empty token
+// asks for the provider's initial collection state; a non-empty token asks
+// only for resources changed since that checkpoint. The report is deliberately
+// limited to VTODO-compatible resources and fetches a body when the provider
+// omits calendar-data from the multistatus response.
+func (c *Client) ListTodosSince(ctx context.Context, collectionHref, token string) (SyncCollectionResult, error) {
+	escapedToken := make([]byte, 0, len(token))
+	escapedToken = xmlEscapeText(escapedToken, token)
+	body := []byte(`<?xml version="1.0" encoding="utf-8" ?>` +
+		`<d:sync-collection xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">` +
+		`<d:sync-token>` + string(escapedToken) + `</d:sync-token>` +
+		`<d:sync-level>1</d:sync-level>` +
+		`<d:prop><d:getetag/><d:getcontenttype/><c:calendar-data/></d:prop>` +
+		`</d:sync-collection>`)
+	resp, err := c.do(ctx, "REPORT", collectionHref, body, func(req *http.Request) {
+		req.Header.Set("Depth", "1")
+		req.Header.Set("Content-Type", "application/xml; charset=utf-8")
+		req.Header.Set("Accept", "application/xml")
+	})
+	if err != nil {
+		return SyncCollectionResult{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusMethodNotAllowed || resp.StatusCode == http.StatusNotImplemented {
+		return SyncCollectionResult{}, fmt.Errorf("%w: provider returned HTTP %d", ErrIncrementalPullUnsupported, resp.StatusCode)
+	}
+	// RFC 6578 permits both 403 (valid-sync-token precondition failed) and
+	// 409 (provider discarded the token) when a non-empty cursor is stale.
+	// In either case callers must resynchronize from an empty token.
+	if (resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusConflict) && token != "" {
+		return SyncCollectionResult{}, fmt.Errorf("%w: provider returned HTTP %d", ErrInvalidSyncToken, resp.StatusCode)
+	}
+	if resp.StatusCode != http.StatusMultiStatus {
+		return SyncCollectionResult{}, &HTTPError{Method: "REPORT", URL: collectionHref, Status: resp.StatusCode}
+	}
+	var report syncCollectionReport
+	if err := xml.NewDecoder(io.LimitReader(resp.Body, maxCalDAVResponseBytes)).Decode(&report); err != nil {
+		return SyncCollectionResult{}, fmt.Errorf("decode CalDAV sync-collection report: %w", err)
+	}
+	if strings.TrimSpace(report.SyncToken) == "" {
+		return SyncCollectionResult{}, fmt.Errorf("CalDAV sync-collection report omitted sync-token")
+	}
+	result := SyncCollectionResult{NextToken: strings.TrimSpace(report.SyncToken)}
+	for _, item := range report.Responses {
+		status, prop := syncCollectionProp(item)
+		memberHref, err := c.resolveRemoteAgainst(collectionHref, item.Href)
+		if err != nil {
+			return SyncCollectionResult{}, fmt.Errorf("resolve CalDAV sync href %q: %w", item.Href, err)
+		}
+		if status == http.StatusNotFound || status == http.StatusGone {
+			result.DeletedHrefs = append(result.DeletedHrefs, memberHref)
+			continue
+		}
+		if status < 200 || status >= 300 {
+			return SyncCollectionResult{}, fmt.Errorf("CalDAV sync-collection resource %q returned HTTP %d", memberHref, status)
+		}
+		var todo *vtodo.Todo
+		etag := prop.ETag
+		if strings.TrimSpace(prop.CalendarData) != "" {
+			todo, err = vtodo.Parse([]byte(prop.CalendarData))
+			if err != nil {
+				return SyncCollectionResult{}, fmt.Errorf("parse CalDAV sync resource %q: %w", memberHref, err)
+			}
+		} else {
+			fetched, fetchErr := c.GetTodo(ctx, memberHref)
+			if fetchErr != nil {
+				return SyncCollectionResult{}, fetchErr
+			}
+			todo, etag = fetched.Todo, fetched.ETag
+		}
+		if todo == nil || todo.UID == "" {
+			return SyncCollectionResult{}, fmt.Errorf("CalDAV sync resource %q has no UID", memberHref)
+		}
+		result.Todos = append(result.Todos, RemoteTodo{Href: memberHref, ETag: etag, Todo: todo})
+	}
+	return result, nil
+}
+
+func xmlEscapeText(dst []byte, value string) []byte {
+	var escaped bytes.Buffer
+	_ = xml.EscapeText(&escaped, []byte(value))
+	return append(dst, escaped.Bytes()...)
+}
+
 // GetTodo retrieves and parses one external VTODO resource.
 func (c *Client) GetTodo(ctx context.Context, href string) (*RemoteTodo, error) {
 	return c.fetchTodo(ctx, http.MethodGet, href)
@@ -444,6 +549,46 @@ func resolveURLReference(base *url.URL, raw string) (*url.URL, error) {
 type multistatus struct {
 	Responses []multistatusResponse `xml:"response"`
 }
+
+type syncCollectionReport struct {
+	Responses []syncCollectionResponse `xml:"response"`
+	SyncToken string                   `xml:"sync-token"`
+}
+
+type syncCollectionResponse struct {
+	Href     string                   `xml:"href"`
+	Propstat []syncCollectionPropstat `xml:"propstat"`
+}
+
+type syncCollectionPropstat struct {
+	Prop   syncCollectionProperties `xml:"prop"`
+	Status string                   `xml:"status"`
+}
+
+type syncCollectionProperties struct {
+	ETag         string `xml:"getetag"`
+	ContentType  string `xml:"getcontenttype"`
+	CalendarData string `xml:"calendar-data"`
+}
+
+func syncCollectionProp(response syncCollectionResponse) (int, syncCollectionProperties) {
+	status := http.StatusOK
+	var prop syncCollectionProperties
+	for _, candidate := range response.Propstat {
+		prop = candidate.Prop
+		fields := strings.Fields(candidate.Status)
+		if len(fields) >= 2 {
+			if parsed, err := strconv.Atoi(fields[1]); err == nil {
+				status = parsed
+			}
+		}
+		if status >= 200 && status < 300 {
+			return status, prop
+		}
+	}
+	return status, prop
+}
+
 type multistatusResponse struct {
 	Href     string   `xml:"href"`
 	Propstat propstat `xml:"propstat"`
