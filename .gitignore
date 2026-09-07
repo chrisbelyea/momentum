@@ -11,3 +11,6 @@ liquibase.zip
 /dist/
 momentum-server
 server
+
+# Browser E2E dependencies
+node_modules/

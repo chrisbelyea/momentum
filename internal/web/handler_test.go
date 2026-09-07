@@ -127,6 +127,47 @@ func TestTaskWorkflowAPIRoundTripsRichFieldsAndPreservesPartialUpdates(t *testin
 	}
 }
 
+func TestTaskWorkflowAPIRejectsStaleConditionalMutation(t *testing.T) {
+	database := setupTestDB(t)
+	defer database.Close()
+	handler := &Handler{taskRepo: db.NewTaskRepository(database)}
+
+	created := httptest.NewRecorder()
+	handler.HandleTasks(created, httptest.NewRequest(http.MethodPost, "/api/tasks", strings.NewReader(`{"title":"Shared task","backend_id":1}`)))
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create returned %d: %s", created.Code, created.Body.String())
+	}
+	var task models.Task
+	if err := json.NewDecoder(created.Body).Decode(&task); err != nil || task.ID == 0 || created.Header().Get("ETag") == "" {
+		t.Fatalf("create did not return a versioned task: %+v etag=%q err=%v", task, created.Header().Get("ETag"), err)
+	}
+	staleVersion := taskVersion(&task)
+
+	// A separate client changes the task after the first client rendered it.
+	fresh := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/tasks/%d", task.ID), strings.NewReader(`{"title":"Changed on another device"}`))
+	fresh.Header.Set("If-Match", `"`+staleVersion+`"`)
+	freshResponse := httptest.NewRecorder()
+	handler.HandleTasks(freshResponse, fresh)
+	if freshResponse.Code != http.StatusOK {
+		t.Fatalf("fresh conditional update returned %d: %s", freshResponse.Code, freshResponse.Body.String())
+	}
+
+	stale := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/tasks/%d", task.ID), strings.NewReader(`{"title":"Stale overwrite"}`))
+	stale.Header.Set("If-Match", `"`+staleVersion+`"`)
+	staleResponse := httptest.NewRecorder()
+	handler.HandleTasks(staleResponse, stale)
+	if staleResponse.Code != http.StatusConflict {
+		t.Fatalf("stale conditional update returned %d: %s", staleResponse.Code, staleResponse.Body.String())
+	}
+	got, err := handler.taskRepo.Get(task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || got.Title != "Changed on another device" {
+		t.Fatalf("stale update overwrote newer task: %+v", got)
+	}
+}
+
 func TestTaskWorkflowAPIValidatesRichFields(t *testing.T) {
 	for _, test := range []struct {
 		name string

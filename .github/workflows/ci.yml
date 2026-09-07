@@ -30,6 +30,31 @@ jobs:
       - run: go test -race ./...
       - run: go build -o bin/momentum-server ./cmd/server
 
+  web-browser-e2e:
+    name: Browser workflow (Chromium)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: go mod download
+      - name: Build release binary for browser workflow
+        run: go build -trimpath -o bin/momentum-server ./cmd/server
+      - name: Install pinned browser test dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Exercise authenticated board/list workflow
+        env:
+          MOMENTUM_E2E_BINARY: ${{ github.workspace }}/bin/momentum-server
+        run: npm run test:e2e
+
   caldav-radicale-interop:
     name: CalDAV interoperability (Radicale)
     runs-on: ubuntu-latest

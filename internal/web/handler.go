@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/chrisbelyea/momentum/internal/auth"
 	"github.com/chrisbelyea/momentum/internal/db"
@@ -235,9 +236,7 @@ func (h *Handler) createTask(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(task)
+	writeTaskResponse(w, http.StatusCreated, &task)
 }
 
 func (h *Handler) updateTask(w http.ResponseWriter, r *http.Request, id int) {
@@ -248,6 +247,11 @@ func (h *Handler) updateTask(w http.ResponseWriter, r *http.Request, id int) {
 	old, err := h.taskRepo.GetForUser(id, uid)
 	if err != nil || old == nil {
 		http.Error(w, "Task not found", 404)
+		return
+	}
+	conditional, err := taskIfMatch(r, old)
+	if err != nil {
+		writeTaskConflict(w)
 		return
 	}
 	// Start from the stored task so this endpoint remains a safe partial update:
@@ -271,12 +275,20 @@ func (h *Handler) updateTask(w http.ResponseWriter, r *http.Request, id int) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := h.taskRepo.UpdateForUser(&task, uid); err != nil {
+	if conditional {
+		err = h.taskRepo.UpdateIfUnchanged(&task, *old.UpdatedAt)
+	} else {
+		err = h.taskRepo.UpdateForUser(&task, uid)
+	}
+	if err != nil {
+		if errors.Is(err, db.ErrTaskVersionConflict) {
+			writeTaskConflict(w)
+			return
+		}
 		http.Error(w, "Task not found", 404)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(task)
+	writeTaskResponse(w, http.StatusOK, &task)
 }
 
 // validateTaskFields enforces the values represented by the browser task
@@ -318,7 +330,26 @@ func (h *Handler) deleteTask(w http.ResponseWriter, r *http.Request, id int) {
 	if !ok {
 		uid = 1
 	}
-	if err := h.taskRepo.DeleteForUser(id, uid); err != nil {
+	old, err := h.taskRepo.GetForUser(id, uid)
+	if err != nil || old == nil {
+		http.Error(w, "Task not found", 404)
+		return
+	}
+	conditional, err := taskIfMatch(r, old)
+	if err != nil {
+		writeTaskConflict(w)
+		return
+	}
+	if conditional {
+		err = h.taskRepo.DeleteIfUnchanged(id, *old.UpdatedAt)
+	} else {
+		err = h.taskRepo.DeleteForUser(id, uid)
+	}
+	if err != nil {
+		if errors.Is(err, db.ErrTaskVersionConflict) {
+			writeTaskConflict(w)
+			return
+		}
 		http.Error(w, "Task not found", 404)
 		return
 	}
@@ -381,17 +412,70 @@ func (h *Handler) HandleUpdateStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Task not found", http.StatusNotFound)
 		return
 	}
+	conditional, err := taskIfMatch(r, task)
+	if err != nil {
+		writeTaskConflict(w)
+		return
+	}
 
 	// Update the status
 	task.Status = req.Status
 
-	if err := h.taskRepo.UpdateForUser(task, userID); err != nil {
+	if conditional {
+		err = h.taskRepo.UpdateIfUnchanged(task, *task.UpdatedAt)
+	} else {
+		err = h.taskRepo.UpdateForUser(task, userID)
+	}
+	if err != nil {
+		if errors.Is(err, db.ErrTaskVersionConflict) {
+			writeTaskConflict(w)
+			return
+		}
 		http.Error(w, fmt.Sprintf("Failed to update task: %v", err), http.StatusInternalServerError)
 		return
 	}
 
+	writeTaskResponse(w, http.StatusOK, task)
+}
+
+// taskVersion is deliberately an opaque, timestamp-derived ETag. The value
+// is emitted in rendered task cards and compared by conditional mutations;
+// clients that do not send If-Match retain the legacy last-write-wins API.
+func taskVersion(task *models.Task) string {
+	if task == nil || task.UpdatedAt == nil {
+		return ""
+	}
+	// Preserve the persisted offset. Rendered cards use the same time value;
+	// normalizing only one side would make an otherwise fresh ETag look stale
+	// when the server is running outside UTC.
+	return task.UpdatedAt.Format(time.RFC3339Nano)
+}
+
+func taskIfMatch(r *http.Request, current *models.Task) (bool, error) {
+	raw := strings.TrimSpace(r.Header.Get("If-Match"))
+	if raw == "" {
+		return false, nil
+	}
+	if len(raw) >= 2 && strings.HasPrefix(raw, "\"") && strings.HasSuffix(raw, "\"") {
+		raw = raw[1 : len(raw)-1]
+	}
+	if raw == "*" || raw != taskVersion(current) {
+		return true, db.ErrTaskVersionConflict
+	}
+	return true, nil
+}
+
+func writeTaskConflict(w http.ResponseWriter) {
+	http.Error(w, "task changed since it was read; reload and retry", http.StatusConflict)
+}
+
+func writeTaskResponse(w http.ResponseWriter, status int, task *models.Task) {
+	if version := taskVersion(task); version != "" {
+		w.Header().Set("ETag", `"`+version+`"`)
+	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(task)
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(task)
 }
 
 // HandleSyncConflicts exposes retained local/provider snapshots and the Phase

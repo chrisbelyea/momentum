@@ -5,20 +5,26 @@ This directory contains the web-based kanban board UI for Momentum.
 ## Features
 
 - **Three-column layout**: Todo, In Progress, Done
-- **Drag-and-drop**: Move tasks between columns using HTML5 Drag and Drop API
+- **Accessible task controls**: Create, edit, delete, and change status with keyboard-friendly form controls; drag-and-drop remains an optional shortcut
+- **Rich task fields**: Edit title, description, status, due date, priority, and tags
+- **Backend selection**: Choose an owned backend from the board; backend and list filter state is represented in shareable URLs
 - **Persistent state**: All changes are saved to the database and persist across page reloads
 - **Responsive design**: Works on desktop and mobile devices
-- **Real-time updates**: Status changes are immediately reflected in the UI
+- **Accessible feedback**: Mutation errors and stale concurrent edits are announced through ARIA live regions and reconciled with server state
 
-## Known Limitations & Future Improvements
+## Current scope
 
-This is an initial scaffold implementation. The following improvements are planned for future releases:
+The server requires an authenticated session for the board, list, and task API. Each task mutation may include an `If-Match` version from the rendered task card. If another device changes the task first, the server returns `409 Conflict`; the browser announces the conflict and reloads the authoritative board instead of silently overwriting the newer change. Failed optimistic status moves are likewise reloaded from the server.
 
 1. **Authentication**: Currently uses hard-coded backend_id=1. Future versions will integrate proper user authentication and authorization.
 2. **Router**: Uses manual URL parsing. Consider migrating to gorilla/mux or similar router for more robust parameter handling.
 3. **Accessibility**: Replace alert() with ARIA live regions for screen reader compatibility.
 4. **Error Recovery**: Improve error handling to revert specific task cards instead of full page reload.
 5. **WebSocket Support**: Add real-time updates for collaborative editing scenarios.
+
+The historical scaffold notes above are superseded by the authenticated,
+accessible workflow described in `## Current scope`; live push updates remain
+outside the current release scope.
 
 ## Architecture
 
@@ -27,6 +33,10 @@ This is an initial scaffold implementation. The following improvements are plann
 
 ### API Endpoints
 - `GET /` - Render the kanban board
+- `GET /list` - Render the filtered/sorted list view
+- `POST /api/tasks` - Create a task
+- `PUT /api/tasks/{id}` - Update task fields
+- `DELETE /api/tasks/{id}` - Delete a task
 - `PATCH /api/tasks/{id}/status` - Update task status
 
 ### Status Mapping
