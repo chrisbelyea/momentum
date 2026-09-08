@@ -103,6 +103,7 @@ func runServer(stop <-chan os.Signal) {
 	taskRepo := db.NewTaskRepository(database)
 	backendRepo := db.NewBackendRepository(database)
 	authService := auth.NewService(database)
+	authPageHandler := web.NewAuthPageHandler(authService)
 
 	// Initialize handlers
 	caldavHandler := caldav.NewHandler(taskRepo)
@@ -115,6 +116,9 @@ func runServer(stop <-chan os.Signal) {
 	// Setup routes
 	mux := http.NewServeMux()
 	mux.Handle("/auth/", authService.Routes())
+	mux.HandleFunc("/login", authPageHandler.HandleLogin)
+	mux.HandleFunc("/register", authPageHandler.HandleRegister)
+	mux.HandleFunc("/logout", authPageHandler.HandleLogout)
 
 	// Static file serving (PWA assets: manifest.json, icons, service worker).
 	// Directory listings are disabled; individual files are cached for one year.
@@ -152,8 +156,8 @@ func runServer(stop <-chan os.Signal) {
 	})
 
 	// Web UI routes
-	mux.Handle("/", authService.Require(http.HandlerFunc(webHandler.HandleIndex)))
-	mux.Handle("/list", authService.Require(http.HandlerFunc(webHandler.HandleList)))
+	mux.Handle("/", authService.RequirePage(http.HandlerFunc(webHandler.HandleIndex)))
+	mux.Handle("/list", authService.RequirePage(http.HandlerFunc(webHandler.HandleList)))
 	mux.Handle("/api/tasks", authService.Require(http.HandlerFunc(webHandler.HandleTasks)))
 	mux.Handle("/api/tasks/", authService.Require(http.HandlerFunc(webHandler.HandleTasks)))
 	mux.Handle("/api/sync/conflicts", authService.Require(http.HandlerFunc(webHandler.HandleSyncConflicts)))

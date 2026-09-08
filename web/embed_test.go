@@ -7,6 +7,7 @@ import (
 
 func TestEmbeddedAssetsPresent(t *testing.T) {
 	for _, path := range []string{
+		"templates/auth.html",
 		"templates/index.html",
 		"templates/list.html",
 		"static/manifest.json",
