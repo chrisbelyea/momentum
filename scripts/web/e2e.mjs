@@ -152,8 +152,13 @@ try {
   assert.equal(await reconciledCard.getAttribute('data-status'), 'IN-PROCESS');
 
   // Delete through the visible board control and verify it is gone in list.
-  await reconciledCard.getByRole('button', { name: 'Delete' }).click();
-  await page.waitForLoadState('domcontentloaded');
+  // The delete form performs a document navigation. Wait for the navigation
+  // it triggers before starting the list navigation, otherwise Chromium can
+  // abort the second goto while the first response is still being committed.
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+    reconciledCard.getByRole('button', { name: 'Delete' }).click(),
+  ]);
   await page.goto(`${baseURL}/list?backend_id=${backendID}`);
   assert.doesNotMatch(await page.locator('body').textContent(), /Concurrent device wins/);
 
@@ -168,6 +173,9 @@ try {
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page.getByRole('alert').waitFor();
   assert.match(await page.getByRole('alert').textContent(), /Invalid email or password/);
+  // The failed POST re-renders a fresh form, so the browser must refill both
+  // fields before retrying rather than relying on the discarded form values.
+  await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
