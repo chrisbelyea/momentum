@@ -151,7 +151,9 @@ jobs:
           echo 'health endpoint did not become ready'; exit 1
 
       - name: Exercise packaged launcher
-        if: runner.os != 'Windows'
+        # The Linux launcher test also validates systemd installation paths;
+        # macOS uses the native binary archive but has no Linux launcher.
+        if: runner.os == 'Linux'
         run: scripts/packaging/linux/test-launcher.sh "$(find . -type f -name 'momentum-server' -print -quit)"
       - name: Exercise packaged launcher
         if: runner.os == 'Windows'
