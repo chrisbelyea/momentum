@@ -12,5 +12,9 @@ grep -q '\[int\]\$Port = 8443' "${ROOT}/scripts/packaging/windows/Run-Momentum.p
 grep -q 'MOMENTUM_ENCRYPTION_KEY' "${ROOT}/scripts/packaging/windows/Run-Momentum.ps1"
 grep -q '\[string\]\$EncryptionKey' "${ROOT}/scripts/packaging/windows/Install-Momentum.ps1"
 grep -q 'MOMENTUM_SERVICE_NAME' "${ROOT}/scripts/packaging/windows/Install-Momentum.ps1"
+grep -q "Join-Path \$env:ProgramFiles 'Momentum'" "${ROOT}/scripts/packaging/windows/Install-Momentum.ps1"
+grep -q "Join-Path \$env:ProgramData 'Momentum'" "${ROOT}/scripts/packaging/windows/Install-Momentum.ps1"
+grep -q 'icacls.exe' "${ROOT}/scripts/packaging/windows/Install-Momentum.ps1"
 test -f "${ROOT}/scripts/packaging/windows/Test-Launcher.ps1"
+test -f "${ROOT}/scripts/packaging/windows/Test-TaskWorkflow.ps1"
 echo 'Native packaging files validated.'

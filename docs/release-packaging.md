@@ -257,10 +257,14 @@ protects `%APPDATA%\Momentum\encryption.key` on first use unless
 default. To register an automatic Windows service, rerun from an elevated
 PowerShell prompt with
 `-RegisterService -EncryptionKey '<strong-random-key>'`; it refuses to replace
-an existing service implicitly. The installer stores the per-service database
-path, service name, and production encryption key in the SCM service
-environment. Never use `MOMENTUM_DEV_MODE=1` for a service exposed beyond local
-development.
+an existing service implicitly. Service mode defaults to the LocalSystem
+identity, `%ProgramFiles%\Momentum` for the executable, and
+`%ProgramData%\Momentum` for the database and development certificate. The
+installer grants that service identity the required access to those paths and
+stores the database path, service name, and production encryption key in the SCM
+service environment. If custom paths are supplied, the installer applies the
+same service ACLs. Never use `MOMENTUM_DEV_MODE=1` for a service exposed beyond
+local development.
 
 #### First run, upgrades, and backups
 

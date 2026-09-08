@@ -156,23 +156,22 @@ jobs:
         shell: pwsh
         env:
           MOMENTUM_CI_SERVICE: Momentum-CI-${{ github.run_id }}
-          MOMENTUM_CI_INSTALL: ${{ runner.temp }}\Momentum-CI-${{ github.run_id }}\install
-          MOMENTUM_CI_DATA: ${{ runner.temp }}\Momentum-CI-${{ github.run_id }}\data
         run: |
           $ErrorActionPreference = 'Stop'
           $serviceName = $env:MOMENTUM_CI_SERVICE
-          $installDir = $env:MOMENTUM_CI_INSTALL
-          $dataDir = $env:MOMENTUM_CI_DATA
+          $expectedDataDir = Join-Path $env:ProgramData 'Momentum'
           $key = 'ci-only-' + [guid]::NewGuid().ToString('N')
-          New-Item -ItemType Directory -Force -Path $installDir, $dataDir | Out-Null
           try {
             & .\scripts\packaging\windows\Install-Momentum.ps1 `
               -BinaryPath (Resolve-Path .\momentum-server.exe) `
-              -InstallDirectory $installDir `
-              -DataDirectory $dataDir `
               -RegisterService `
               -ServiceName $serviceName `
               -EncryptionKey $key
+
+            $serviceEnvironment = (Get-ItemProperty -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Services\$serviceName").Environment
+            if (-not ($serviceEnvironment -contains "DB_PATH=$(Join-Path $expectedDataDir 'momentum.db')")) {
+              throw "Windows service did not use the default ProgramData database path: $expectedDataDir"
+            }
 
             $ready = $false
             for ($attempt = 1; $attempt -le 30; $attempt++) {
@@ -182,6 +181,8 @@ jobs:
               } catch { Start-Sleep -Seconds 1 }
             }
             if (-not $ready) { throw 'Momentum Windows service did not become healthy on https://localhost:8443/health' }
+
+            & .\scripts\packaging\windows\Test-TaskWorkflow.ps1 -BaseUrl 'https://127.0.0.1:8443'
           } finally {
             if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
               Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
