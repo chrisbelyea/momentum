@@ -73,38 +73,36 @@ func (h *Handler) HandleValidateConnection(w http.ResponseWriter, r *http.Reques
 	}
 
 	var backend models.Backend
-	if err := json.NewDecoder(r.Body).Decode(&backend); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&backend); err != nil {
+		writeValidationError(w, http.StatusBadRequest, "invalid request body")
 		return
+	}
+	if userID, ok := auth.UserIDFromRequest(r); ok {
+		backend.UserID = userID
 	}
 
 	// Validate backend configuration
 	if err := backend.Validate(); err != nil {
-		http.Error(w, fmt.Sprintf("Invalid backend configuration: %v", err), http.StatusBadRequest)
+		writeValidationError(w, http.StatusBadRequest, "invalid backend configuration")
 		return
 	}
 
 	// Only external CalDAV backends can be validated
 	if backend.Type != models.BackendTypeExternalCalDAV {
-		http.Error(w, "Only external CalDAV backends can be validated", http.StatusBadRequest)
+		writeValidationError(w, http.StatusBadRequest, "only external CalDAV backends can be validated")
 		return
 	}
 
 	// Create CalDAV client and validate connection
 	client, err := caldav.NewClient(backend.Config)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to create CalDAV client: %v", err), http.StatusBadRequest)
+		writeValidationError(w, http.StatusBadRequest, "CalDAV configuration is not valid")
 		return
 	}
 	defer client.Close()
 
 	if err := client.ValidateConnection(); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"valid": false,
-			"error": err.Error(),
-		})
+		writeValidationError(w, http.StatusBadRequest, validationErrorMessage(err))
 		return
 	}
 
@@ -113,6 +111,31 @@ func (h *Handler) HandleValidateConnection(w http.ResponseWriter, r *http.Reques
 		"valid":   true,
 		"message": "Connection validated successfully",
 	})
+}
+
+// writeValidationError keeps validation failures machine-readable for the
+// settings page without echoing request data (especially credentials) into a
+// browser or a log. The underlying error is intentionally reduced to a stable,
+// actionable category at this boundary.
+func writeValidationError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"valid": false, "error": message})
+}
+
+func validationErrorMessage(err error) string {
+	if err == nil {
+		return "connection validation failed"
+	}
+	message := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(message, "401"), strings.Contains(message, "403"), strings.Contains(message, "authentication"):
+		return "check the CalDAV username and app password"
+	case strings.Contains(message, "https"), strings.Contains(message, "url"), strings.Contains(message, "certificate"):
+		return "check the HTTPS URL, certificate, and CalDAV server policy"
+	default:
+		return "the CalDAV server could not be reached; check the URL and credentials"
+	}
 }
 
 // listBackends lists all backends for a user
@@ -201,11 +224,49 @@ func (h *Handler) updateBackend(w http.ResponseWriter, r *http.Request, backendI
 		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 		return
 	}
+	existing, err := h.backendRepo.Get(backendID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get backend: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if existing == nil {
+		http.Error(w, "Backend not found", http.StatusNotFound)
+		return
+	}
+	if uid, ok := auth.UserIDFromRequest(r); ok && existing.UserID != uid {
+		// Do not disclose whether another user's backend ID exists.
+		http.Error(w, "Backend not found", http.StatusNotFound)
+		return
+	}
 
 	// Ensure ID matches the URL
 	backend.ID = backendID
 	if uid, ok := auth.UserIDFromRequest(r); ok {
 		backend.UserID = uid
+	} else {
+		backend.UserID = existing.UserID
+	}
+
+	// GET responses intentionally redact passwords. Preserve the encrypted
+	// credential when the settings page submits an edit without a replacement;
+	// otherwise an innocuous name change would invalidate an external backend.
+	// The value is only used in memory for validation/encryption and is never
+	// written to the response.
+	if backend.Config == nil {
+		backend.Config = existing.Config
+	} else if existing.Config != nil {
+		if backend.Config.Password == "" {
+			backend.Config.Password = existing.Config.Password
+		}
+		if backend.Config.Username == "" {
+			backend.Config.Username = existing.Config.Username
+		}
+		if backend.Config.ClientCertPath == "" {
+			backend.Config.ClientCertPath = existing.Config.ClientCertPath
+		}
+		if backend.Config.ClientKeyPath == "" {
+			backend.Config.ClientKeyPath = existing.Config.ClientKeyPath
+		}
 	}
 
 	// Validate backend

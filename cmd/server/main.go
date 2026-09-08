@@ -154,6 +154,7 @@ func runServer(stop <-chan os.Signal) {
 	// Web UI routes
 	mux.Handle("/", authService.Require(http.HandlerFunc(webHandler.HandleIndex)))
 	mux.Handle("/list", authService.Require(http.HandlerFunc(webHandler.HandleList)))
+	mux.Handle("/settings/backends", authService.Require(http.HandlerFunc(webHandler.HandleBackendsPage)))
 	mux.Handle("/api/tasks", authService.Require(http.HandlerFunc(webHandler.HandleTasks)))
 	mux.Handle("/api/tasks/", authService.Require(http.HandlerFunc(webHandler.HandleTasks)))
 	mux.Handle("/api/sync/conflicts", authService.Require(http.HandlerFunc(webHandler.HandleSyncConflicts)))

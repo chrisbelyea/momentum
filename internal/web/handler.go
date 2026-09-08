@@ -144,6 +144,39 @@ func (h *Handler) HandleList(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleBackendsPage renders the authenticated backend configuration screen.
+// The JSON endpoints remain in internal/backend; this page only supplies the
+// browser workflow and gets its data from the same ownership-scoped repository.
+func (h *Handler) HandleBackendsPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.backendRepo == nil {
+		http.Error(w, "backend configuration is unavailable", http.StatusNotImplemented)
+		return
+	}
+	userID, ok := auth.UserIDFromRequest(r)
+	if !ok {
+		userID = 1
+	}
+	backends, err := h.backendRepo.List(userID)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to load backends: %v", err), http.StatusInternalServerError)
+		return
+	}
+	// List sanitizes only at the response boundary too, but keep this explicit
+	// because the values are passed into an HTML template.
+	for _, backend := range backends {
+		backend.SanitizeForResponse()
+	}
+	if err := h.templates.ExecuteTemplate(w, "backends.html", struct {
+		Backends []*models.Backend
+	}{Backends: backends}); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to render backend settings: %v", err), http.StatusInternalServerError)
+	}
+}
+
 func (h *Handler) backendForRequest(r *http.Request, userID int) (int, error) {
 	if raw := r.URL.Query().Get("backend_id"); raw != "" {
 		id, err := strconv.Atoi(raw)

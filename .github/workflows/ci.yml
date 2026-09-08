@@ -83,6 +83,10 @@ jobs:
         env:
           MOMENTUM_E2E_BINARY: ${{ github.workspace }}/bin/momentum-server
         run: npm run test:e2e
+      - name: Exercise browser backend setup and task workflow
+        env:
+          MOMENTUM_E2E_BINARY: ${{ github.workspace }}/bin/momentum-server
+        run: npm run test:e2e:backend
 
   caldav-radicale-interop:
     name: CalDAV interoperability (Radicale)

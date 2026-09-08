@@ -9,6 +9,7 @@ func TestEmbeddedAssetsPresent(t *testing.T) {
 	for _, path := range []string{
 		"templates/index.html",
 		"templates/list.html",
+		"templates/backends.html",
 		"static/manifest.json",
 		"static/sw.js",
 		"static/icon.svg",

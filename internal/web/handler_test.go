@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chrisbelyea/momentum/internal/crypto"
 	"github.com/chrisbelyea/momentum/internal/db"
 	"github.com/chrisbelyea/momentum/internal/models"
 	_ "github.com/mattn/go-sqlite3"
@@ -247,6 +248,40 @@ func TestBackendSelectionUsesURLStateAndOwnership(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "Second") || strings.Contains(rec.Body.String(), "First") {
 		t.Fatalf("URL-selected backend rendered wrong tasks: %s", rec.Body.String())
+	}
+}
+
+func TestBackendSettingsPageRendersSafeBackendWorkflow(t *testing.T) {
+	database := setupTestDB(t)
+	defer database.Close()
+	if err := crypto.InitializeEncryption("test-encryption-key-for-web-backends"); err != nil {
+		t.Fatal(err)
+	}
+	repo := db.NewBackendRepository(database)
+	if err := repo.Create(&models.Backend{
+		UserID: 1, Type: models.BackendTypeExternalCalDAV, Name: "Work calendar",
+		Config: &models.BackendConfig{URL: "https://calendar.example.com/dav/tasks", Username: "alice", Password: "do-not-render"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := NewHandler(db.NewTaskRepository(database), repo)
+	rec := httptest.NewRecorder()
+	handler.HandleBackendsPage(rec, httptest.NewRequest(http.MethodGet, "/settings/backends", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("settings page returned %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, required := range []string{
+		"Configured backends", "id=\"backend-form\"", "id=\"validate-backend\"",
+		"Use on board", "Edit", "Delete", "/backends/validate", "/settings/backends",
+	} {
+		if !strings.Contains(body, required) {
+			t.Errorf("settings page is missing %q", required)
+		}
+	}
+	if strings.Contains(body, "do-not-render") {
+		t.Fatal("backend settings page must never render a password")
 	}
 }
 
