@@ -2,13 +2,13 @@
 
 This document provides an up-to-date assessment of Momentum's implementation progress and outlines the prioritized next steps.
 
-> Last updated: 2026-09-07 (main `f00a365`, release `v0.2.0-rc3`)
+> Last updated: 2026-09-08 (main `9475d41`, release `v0.2.2`)
 
 ---
 
 ## Summary
 
-Momentum has a runnable authenticated server for Windows and Linux. Main includes canonical schema upgrades, secure sessions and ownership checks, embedded web assets, TLS-only serving, CalDAV VTODO JSON/iCalendar task resources, external collection discovery and CRUD, standards-focused Radicale and provider-compatible Nextcloud interoperability checks, executable sync planning/cycles with transactional apply and conflict recovery, incremental provider cursors with live interrupted-sync recovery, per-backend sync limits and operation events, release-binary workflow tests, and native launch/service packaging. The authenticated web workflow (#65), CalDAV interoperability (#67), synchronization (#68), documentation/license gate (#69), and verified release publication (#128) are complete for their documented acceptance criteria. The current prerelease is `v0.2.0-rc3`; post-Phase-1 native-client/provider planning is tracked in #71 and [docs/post-phase1-roadmap.md](post-phase1-roadmap.md).
+Momentum has a runnable authenticated server for Windows and Linux. Main includes canonical schema upgrades, secure sessions and ownership checks, embedded web assets, TLS-only serving, CalDAV VTODO JSON/iCalendar task resources, external collection discovery and CRUD, standards-focused Radicale and provider-compatible Nextcloud interoperability checks, executable sync planning/cycles with transactional apply and conflict recovery, incremental provider cursors with live interrupted-sync recovery, per-backend sync limits and operation events, release-binary workflow tests, and native launch/service packaging. The authenticated web workflow (#65), CalDAV interoperability (#67), synchronization (#68), documentation/license gate (#69), verified release publication (#128), and packaged-launcher acceptance (#138) are complete for their documented acceptance criteria. The current stable release is `v0.2.2`; post-Phase-1 native-client/provider planning is tracked in #71 and [docs/post-phase1-roadmap.md](post-phase1-roadmap.md).
 
 ---
 
@@ -74,7 +74,7 @@ and verification gaps:
 | **External CalDAV** | Authenticated collection discovery, VTODO CRUD, REPORT lifecycle, a sync adapter, deterministic local compatibility profiles, and green Radicale 3.1.8 plus Nextcloud Tasks 0.17.1 provider-compatible checks are implemented; hosted-service certification remains explicitly out of scope. |
 | **VTODO wire format** | RFC 5545 parser/serializer, canonical persistence, date-only fidelity, provider extension preservation, and fixture coverage are implemented. The JSON/iCalendar boundary is documented in `docs/vtodo-api.md`. |
 | **Credential storage** | No OS keychain integration for clients. |
-| **Release packaging** | Native Linux/Windows launch and service helpers are included in archives. Published prerelease `v0.2.0-rc3` includes Linux amd64/arm64, Windows amd64, and native macOS amd64/arm64 archives; release CI and downloaded Linux amd64 validation pass the complete 16-check workflow. |
+| **Release packaging** | Native Linux/Windows launch and service helpers are included in archives. Published stable `v0.2.2` includes Linux amd64/arm64, Windows amd64, and native macOS amd64/arm64 archives; release CI passed platform-appropriate health and launcher smoke plus complete fresh-database task workflows before publication. |
 
 ---
 
