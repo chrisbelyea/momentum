@@ -47,7 +47,10 @@ const server = spawn(binary, [], {
 let browser;
 try {
   await waitForServer(`${baseURL}/health`);
-  const launchOptions = { headless: true };
+  // Service-worker script fetches do not consistently honor the context-level
+  // ignoreHTTPSErrors option. The test server uses Momentum's documented
+  // self-signed development certificate, so explicitly allow it in Chromium.
+  const launchOptions = { headless: true, args: ['--ignore-certificate-errors'] };
   if (process.env.MOMENTUM_E2E_CHROMIUM) launchOptions.executablePath = process.env.MOMENTUM_E2E_CHROMIUM;
   browser = await chromium.launch(launchOptions);
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
@@ -105,8 +108,14 @@ try {
   // trigger registration.update() instead of being hidden by browser caches.
   await page.reload({ waitUntil: 'domcontentloaded' });
   const worker = await page.evaluate(async () => {
-    const registration = await navigator.serviceWorker.ready;
-    await registration.update();
+    // Register explicitly as well as through the page template so this check
+    // cannot hang forever if the root-scoped worker fails to install.
+    const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    const ready = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('service worker did not become ready')), 10000)),
+    ]);
+    await ready.update();
     return {
       scope: registration.scope,
       scriptURL: registration.active?.scriptURL ?? '',
@@ -154,7 +163,13 @@ try {
   assert.equal(offlineManifest.body.name, 'Momentum');
   const offlineAPI = await page.evaluate(async () => {
     try {
-      const response = await fetch('/api/tasks?backend_id=2', { cache: 'no-store' });
+      // Chromium can leave an offline network request pending instead of
+      // rejecting it immediately. Bound the probe so this acceptance test
+      // deterministically verifies that no authenticated API data is cached.
+      const response = await fetch('/api/tasks?backend_id=2', {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(5000),
+      });
       return { status: response.status };
     } catch (error) {
       return { error: String(error) };
@@ -243,8 +258,10 @@ try {
   assert.equal(await reconciledCard.getAttribute('data-status'), 'IN-PROCESS');
 
   // Delete through the visible board control and verify it is gone in list.
-  await reconciledCard.getByRole('button', { name: 'Delete' }).click();
-  await page.waitForLoadState('domcontentloaded');
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+    reconciledCard.getByRole('button', { name: 'Delete' }).click(),
+  ]);
   await page.goto(`${baseURL}/list?backend_id=2`);
   assert.doesNotMatch(await page.locator('body').textContent(), /Concurrent device wins/);
   console.log('Momentum browser E2E passed: authenticated board/list create, rich edit, conflict, failure reconciliation, delete');
