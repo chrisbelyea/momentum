@@ -22,7 +22,8 @@ if ([string]::IsNullOrWhiteSpace($env:MOMENTUM_ENCRYPTION_KEY)) {
         $env:MOMENTUM_ENCRYPTION_KEY = (Get-Content -LiteralPath $EncryptionKeyFile -Raw).Trim()
     } else {
         $bytes = [byte[]]::new(32)
-        [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+        $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+        try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
         $env:MOMENTUM_ENCRYPTION_KEY = [Convert]::ToBase64String($bytes)
         [System.IO.File]::WriteAllText($EncryptionKeyFile, $env:MOMENTUM_ENCRYPTION_KEY, [System.Text.UTF8Encoding]::new($false))
         $acl = Get-Acl -LiteralPath $EncryptionKeyFile
