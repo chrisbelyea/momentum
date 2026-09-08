@@ -22,11 +22,14 @@ try {
     for ($i = 0; $i -lt 20; $i++) {
         try {
             & curl.exe -kfsS "https://127.0.0.1:$Port/health" | Out-Null
-            $ready = $true
-            break
+            if ($LASTEXITCODE -eq 0) {
+                $ready = $true
+                break
+            }
         } catch {
             Start-Sleep -Seconds 1
         }
+        Start-Sleep -Seconds 1
     }
     if (-not $ready) {
         Get-Content -LiteralPath $stdoutPath, $stderrPath -ErrorAction SilentlyContinue

@@ -21,13 +21,13 @@ if ([string]::IsNullOrWhiteSpace($env:MOMENTUM_ENCRYPTION_KEY)) {
     if (Test-Path -LiteralPath $EncryptionKeyFile -PathType Leaf) {
         $env:MOMENTUM_ENCRYPTION_KEY = (Get-Content -LiteralPath $EncryptionKeyFile -Raw).Trim()
     } else {
-        $bytes = New-Object byte[] 32
+        $bytes = [byte[]]::new(32)
         [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
         $env:MOMENTUM_ENCRYPTION_KEY = [Convert]::ToBase64String($bytes)
-        [System.IO.File]::WriteAllText($EncryptionKeyFile, $env:MOMENTUM_ENCRYPTION_KEY, (New-Object System.Text.UTF8Encoding($false)))
+        [System.IO.File]::WriteAllText($EncryptionKeyFile, $env:MOMENTUM_ENCRYPTION_KEY, [System.Text.UTF8Encoding]::new($false))
         $acl = Get-Acl -LiteralPath $EncryptionKeyFile
         $acl.SetAccessRuleProtection($true, $false)
-        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($env:USERNAME, 'FullControl', 'Allow')
+        $rule = [System.Security.AccessControl.FileSystemAccessRule]::new($env:USERNAME, 'FullControl', 'Allow')
         $acl.SetAccessRule($rule)
         Set-Acl -LiteralPath $EncryptionKeyFile -AclObject $acl
     }
