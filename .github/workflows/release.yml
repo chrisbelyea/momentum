@@ -191,6 +191,27 @@ jobs:
         shell: bash
         run: scripts/release/integration-test.sh "$(find . -type f -name '${{ matrix.binary }}' -print -quit)"
 
+  runtime-sync-radicale:
+    name: Release runtime sync (Radicale)
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned standards-focused CalDAV server
+        run: python -m pip install --disable-pip-version-check 'radicale==3.1.8'
+      - name: Download Linux release artifact
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: gh release download "${{ github.ref_name }}" --pattern 'momentum-server-linux-amd64.tar.gz' --repo "${{ github.repository }}"
+      - name: Extract Linux release artifact
+        run: tar -xzf momentum-server-linux-amd64.tar.gz
+      - name: Exercise authenticated runtime sync workflow
+        run: |
+          chmod +x scripts/release/runtime-sync-radicale.sh
+          scripts/release/runtime-sync-radicale.sh "$(find . -type f -name 'momentum-server' -print -quit)"
+
   verify-arm64-artifact:
     name: Verify Linux ARM64 artifact
     needs: [goreleaser, macos-attach]
@@ -204,7 +225,7 @@ jobs:
 
   publish:
     name: Publish release
-    needs: [integration-test, verify-arm64-artifact]
+    needs: [integration-test, runtime-sync-radicale, verify-arm64-artifact]
     runs-on: ubuntu-latest
     steps:
       - name: Publish only after all validation

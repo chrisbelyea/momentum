@@ -50,7 +50,7 @@ func TestClientListTodosSinceUsesSyncTokenAndReportsDeletion(t *testing.T) {
 			_, _ = fmt.Fprint(w, `</c:calendar-data></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response><d:sync-token>cursor&amp;v2</d:sync-token></d:multistatus>`)
 			return
 		}
-		_, _ = fmt.Fprint(w, `<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:href>one.ics</d:href><d:propstat><d:prop><d:getetag>"two"</d:getetag><d:getcontenttype>text/calendar; component=VTODO</d:getcontenttype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response><d:response><d:href>gone.ics</d:href><d:propstat><d:prop/><d:status>HTTP/1.1 404 Not Found</d:status></d:propstat></d:response><d:sync-token>cursor-3</d:sync-token></d:multistatus>`)
+		_, _ = fmt.Fprint(w, `<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response><d:href>one.ics</d:href><d:propstat><d:prop><d:getetag>"two"</d:getetag><d:getcontenttype>text/calendar; component=VTODO</d:getcontenttype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response><d:response><d:href>gone.ics</d:href><d:status>HTTP/1.1 404 Not Found</d:status></d:response><d:sync-token>cursor-3</d:sync-token></d:multistatus>`)
 	}))
 	defer server.Close()
 	client, err := NewClient(&models.BackendConfig{URL: server.URL + "/dav/tasks/", SkipTLSVerify: true})
