@@ -128,6 +128,13 @@ BACKENDS_BODY="$(curl -k -s -b "${COOKIE_JAR}" "${BASE_URL}/backends")"
 BACKEND_ID="$(printf '%s' "${BACKENDS_BODY}" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p')"
 if [ -n "${BACKEND_ID}" ]; then pass "Authenticated user has a default backend"; else fail "No default backend: ${BACKENDS_BODY}"; fi
 
+SYNC_STATUS_BODY="$(curl -k -s -b "${COOKIE_JAR}" "${BASE_URL}/api/sync/status?backend_id=${BACKEND_ID}")"
+if printf '%s' "${SYNC_STATUS_BODY}" | grep -q '"status":"never"'; then
+  pass "GET /api/sync/status exposes the durable sync checkpoint"
+else
+  fail "Sync status endpoint did not return the initial checkpoint: ${SYNC_STATUS_BODY}"
+fi
+
 # --- Test: Health endpoint ---
 echo "--- Health Endpoint ---"
 HTTP_CODE=$(curl -k -s -o /dev/null -w "%{http_code}" "${BASE_URL}/health" 2>/dev/null || echo "000")

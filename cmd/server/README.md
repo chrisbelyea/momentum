@@ -72,6 +72,13 @@ The server is configured via environment variables:
 - `EXTERNAL_HOST`: Public hostname used for HTTP→HTTPS redirect URLs (default: `localhost:<PORT>`)
 - `MOMENTUM_ENCRYPTION_KEY`: Encryption key for backend credentials (required in production)
 - `MOMENTUM_DEV_MODE`: Set to `1` only for local development/integration tests when no encryption key is available
+- `MOMENTUM_SYNC_INTERVAL`: Optional positive Go duration (for example `15m`) to
+  enable periodic external CalDAV synchronization; disabled by default
+
+External CalDAV backends can be run manually with the authenticated
+`POST /api/sync/run?backend_id={id}` endpoint and inspected with
+`GET /api/sync/status?backend_id={id}`. See
+[docs/sync-runtime.md](../../docs/sync-runtime.md).
 
 ## API Endpoints
 

@@ -13,15 +13,15 @@ import (
 
 // SyncCheckpoint is the durable cursor and retry state for one backend.
 type SyncCheckpoint struct {
-	BackendID       int
-	Cursor          string
-	Status          string
-	LastStartedAt   *time.Time
-	LastCompletedAt *time.Time
-	LastError       string
-	RetryCount      int
-	NextRetryAt     *time.Time
-	UpdatedAt       time.Time
+	BackendID       int        `json:"backend_id"`
+	Cursor          string     `json:"cursor,omitempty"`
+	Status          string     `json:"status"`
+	LastStartedAt   *time.Time `json:"last_started_at,omitempty"`
+	LastCompletedAt *time.Time `json:"last_completed_at,omitempty"`
+	LastError       string     `json:"last_error,omitempty"`
+	RetryCount      int        `json:"retry_count"`
+	NextRetryAt     *time.Time `json:"next_retry_at,omitempty"`
+	UpdatedAt       time.Time  `json:"updated_at,omitempty"`
 }
 
 // SyncEntity maps a canonical task to a provider entity. TaskID is nil while
