@@ -50,9 +50,11 @@ advance a cursor; subsequent runs retry the standard REPORT. If a provider
 returns HTTP 403 or 409 for a non-empty token, the token has expired and the
 caller must schedule a fresh import rather than applying an incomplete delta.
 
-These controls and the cursor/resume tests are the reliability slices currently
-implemented for [#68](https://github.com/chrisbelyea/momentum/issues/68). The
-Radicale and Nextcloud CI lifecycle jobs also run the real provider adapter
-through an interrupted pull, SQLite checkpoint restart, and replayed update;
-the retry must apply the provider change from the durable cursor. The lifecycle
-jobs continue to certify complete CRUD interoperability separately.
+These controls and the cursor/resume tests are implemented in the provider-neutral
+library. They are not an automatic runtime feature of the v0.2.2 release binary:
+the server does not yet construct a sync adapter, persist a runtime cycle, or
+schedule external pulls/pushes. Runtime integration and release-binary evidence
+are tracked in [#68](https://github.com/chrisbelyea/momentum/issues/68) and
+[#144](https://github.com/chrisbelyea/momentum/issues/144). The Radicale and
+Nextcloud CI lifecycle jobs certify the outbound adapter separately from the
+running server.

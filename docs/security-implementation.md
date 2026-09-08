@@ -53,15 +53,26 @@ Base64 encoded for storage in the database.
 - **TLS Version**: 1.3 minimum (enforced by default for both server and outbound connections)
 - **Certificate Validation**: Enabled by default
 - **Strong Cipher Suites**: Modern cipher suites only (managed by Go's crypto/tls)
-- **HTTP rejected**: The server requires TLS certificate and key at startup; plaintext HTTP is never served
+- **HTTPS only**: The application serves the task API and web UI over TLS. An optional
+  HTTP listener may be enabled solely to issue redirects to HTTPS; it does not serve
+  application content.
 
 ### Server TLS Configuration
 
 Location: `cmd/server/main.go`
 
-The server enforces TLS on startup. The `TLS_CERT` and `TLS_KEY` environment variables
-must be set to valid certificate and key file paths. If they are absent the server exits
-with an error. An optional HTTP redirect listener can be enabled via `HTTP_REDIRECT_PORT`.
+The server enforces TLS on startup. Operators may provide `TLS_CERT` and `TLS_KEY` as
+PEM file paths. If either is omitted, the server creates and reuses a self-signed
+development certificate under `MOMENTUM_DEV_CERT_DIR` (or the user's
+`~/.momentum/dev-certs` directory). This fallback is for local use; production
+deployments must provide a CA-issued certificate. An optional HTTP redirect listener
+can be enabled via `HTTP_REDIRECT_PORT`.
+
+The v0.2.2 server listens on all interfaces for the configured `PORT`. Its
+auto-generated certificate is valid only for localhost and loopback addresses.
+For local use, keep the port behind the host firewall; for a network deployment,
+provide a trusted certificate and restrict exposure with a firewall or reverse
+proxy. Loopback-by-default binding is tracked in [#143](https://github.com/chrisbelyea/momentum/issues/143).
 
 ```go
 server := &http.Server{
@@ -197,7 +208,7 @@ MOMENTUM_ENCRYPTION_KEY="your-strong-random-key-here"
 - Use a strong, random key (at least 32 characters)
 - Store securely (e.g., secrets manager, not in code)
 - Never commit to version control
-- Rotate periodically
+- Rotate periodically; the server does not rotate or re-encrypt existing values automatically
 
 ### Key Generation
 
@@ -206,8 +217,7 @@ Generate a secure key:
 # Linux/macOS
 openssl rand -base64 32
 
-# Or using Go
-go run -c 'package main; import "crypto/rand"; import "encoding/base64"; import "fmt"; func main() { b := make([]byte, 32); rand.Read(b); fmt.Println(base64.StdEncoding.EncodeToString(b)) }'
+# Or use another approved secret generator. Do not put the key in source control.
 ```
 
 ## Compliance
@@ -223,7 +233,8 @@ This implementation follows security best practices from:
 
 - [x] All credentials encrypted at rest (AES-256-GCM)
 - [x] TLS 1.3+ enforced for all connections (server and external)
-- [x] Plaintext HTTP rejected — server exits without TLS cert/key
+- [x] Plaintext application traffic is not served; optional HTTP is redirect-only
+- [ ] Production certificate provisioning and renewal are automated by Momentum (operators must manage this)
 - [x] Certificate validation enabled by default
 - [x] Passwords never returned in API responses
 - [x] Comprehensive input validation

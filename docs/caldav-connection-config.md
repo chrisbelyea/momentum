@@ -1,13 +1,19 @@
 # External CalDAV Connection Configuration
 
-This document describes how to configure and use external CalDAV server connections in Momentum.
+This document describes how to configure and validate external CalDAV server
+connections in Momentum. The v0.2.2 release does not yet run an automatic
+import/push scheduler for those backends; runtime synchronization is tracked in
+[#68](https://github.com/chrisbelyea/momentum/issues/68) and
+[#144](https://github.com/chrisbelyea/momentum/issues/144).
 All `/backends` routes require an authenticated Momentum session. The examples
 show request shapes; add the session cookie returned by `/auth/login` when
 calling them.
 
 ## Overview
 
-Momentum supports connecting to external CalDAV servers in addition to the internal CalDAV server. This allows you to sync tasks from various CalDAV-compatible services like:
+Momentum supports saving and validating external CalDAV server configurations in
+addition to the internal task backend. Once runtime synchronization is available,
+these configurations can connect tasks to CalDAV-compatible services such as:
 
 - Nextcloud
 - OwnCloud
@@ -282,7 +288,7 @@ go test ./internal/db -v
 
 - OAuth 2.0 support for CalDAV servers that support it
 - OS keychain integration for client-side credential storage (see [credential-storage.md](credential-storage.md))
-- Scheduled background synchronization (the current release exposes the tested cycle API and provider checkpoints to a future scheduler)
+- Runtime import/push scheduling and release-binary external sync (see #68 and #144)
 - Hosted-service certification beyond the pinned provider-compatible Nextcloud CI service
 - Automatic credential rotation
 - Multi-factor authentication support

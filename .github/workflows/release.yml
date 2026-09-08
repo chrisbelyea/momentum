@@ -60,7 +60,8 @@ jobs:
           mkdir -p "${staging}/scripts"
           cp dist/server/momentum-server "${staging}/"
           cp -R scripts/packaging "${staging}/scripts/"
-          cp LICENSE docs/release-packaging.md "${staging}/"
+          cp LICENSE docs/release-packaging.md docs/operations.md \
+            docs/tls-setup.md docs/database-schema.md "${staging}/"
           tar -czf "${archive}" -C "${staging}" .
           shasum -a 256 "${archive}" > "${archive}.sha256"
           mkdir -p macos-assets

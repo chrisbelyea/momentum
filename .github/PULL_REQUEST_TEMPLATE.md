@@ -8,7 +8,7 @@
 - [ ] Linked to an Issue with acceptance criteria
 - [ ] Tests added/updated
 - [ ] Docs updated (spec/vision/design/README)
-- [ ] CI passes (lint/tests/liquibase validate)
+- [ ] CI passes (schema drift/unit/integration checks)
 - [ ] Security considerations addressed
 
 ## Notes

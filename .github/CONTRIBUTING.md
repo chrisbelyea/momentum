@@ -13,7 +13,7 @@ The `main` branch is protected with the following requirements:
 ### Required for Merge
 - **CI Status Checks**: All CI workflow jobs must pass before merging
   - Repository structure validation
-  - Liquibase installation verification
+  - Canonical SQLite schema generation/drift verification
   - (Future: linting, unit tests, integration tests, security scans)
 - **Pull Request Reviews**: At least one approving review from CODEOWNERS
 - **Up-to-date Branch**: PRs must be up-to-date with the base branch before merging
@@ -30,13 +30,16 @@ The `main` branch is protected with the following requirements:
 - Security: TLS-only, secure secret handling.
 - Tests accompany changes; prefer simple, portable solutions.
 
-## Database Migrations
-- All database schema changes must use Liquibase migrations (see `liquibase/README.md`).
-- Create changesets in `liquibase/changelogs/` and include them in `liquibase/changelog.xml`.
-- Validate migrations locally before committing:
-  ```bash
-  liquibase --defaultsFile=liquibase/liquibase.properties validate
-  ```
-- **CI automatically validates changesets** on every PR. Invalid changesets will fail the build and block merging.
-- Never modify deployed changesets; create new changesets for corrections.
-- Test migrations on both SQLite (default) and PostgreSQL (production) when possible.
+## Database migrations
+
+- All release SQLite schema changes must update the canonical SQL changelog in
+  `internal/db/schema/changelog/` and include an upgrade test.
+- Regenerate the embedded fresh-install artifact with
+  `scripts/db/generate-init-sql.sh` and validate it with
+  `scripts/db/generate-init-sql.sh --check`.
+- Runtime upgrades are applied by `db.InitializeSchema` in the release binary.
+  Do not add Liquibase files, independent development DDL, or manual migration
+  instructions for the SQLite release path; the retired Liquibase sources are
+  not part of this repository.
+- CI runs the generated-schema drift check on every PR. Never edit
+  `internal/db/schema/init.sql` by hand.

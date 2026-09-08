@@ -41,16 +41,23 @@ The current published release is the stable
 It contains Linux amd64/arm64, Windows amd64, and native macOS amd64/arm64
 archives. Release workflow run 34234487845 passed platform-appropriate health
 and packaged-launcher smoke plus complete fresh-database task workflows on all
-four runner platforms before publication. Phase 1 documentation/license and
-verified-publication gates (#69 and #128) are closed; the release notes document
-the supported platforms, database initialization/upgrades, TLS setup, and
-known limitations. The authenticated web workflow (#65), CalDAV
-interoperability (#67), and reliable synchronization (#68) have passed their
-documented acceptance criteria. Post-Phase-1 native clients and new provider
-integrations are tracked separately in [#71](https://github.com/chrisbelyea/momentum/issues/71).
+four runner platforms before publication. The release notes document the
+supported platforms, database initialization/upgrades, TLS setup, and known
+limitations. The authenticated web and CalDAV protocol work is covered by the
+release and CI evidence; runtime external synchronization remains active work
+in [#68](https://github.com/chrisbelyea/momentum/issues/68) and
+[#144](https://github.com/chrisbelyea/momentum/issues/144). Documentation and
+release acceptance are tracked by [#69](https://github.com/chrisbelyea/momentum/issues/69)
+and [#128](https://github.com/chrisbelyea/momentum/issues/128); an issue is not
+considered complete until its acceptance evidence is linked there. Post-Phase-1
+native clients and new provider integrations are tracked separately in
+[#71](https://github.com/chrisbelyea/momentum/issues/71).
 
-The archives also include `scripts/packaging/` with the native launch and
-service setup helpers described below.
+The archives include the MIT `LICENSE`, `scripts/packaging/` native launch and
+service setup helpers, and the operator guides `docs/operations.md`,
+`docs/tls-setup.md`, `docs/database-schema.md`, and this document. The release
+archive is the deployment unit; no repository checkout or co-located `web/`
+directory is required at runtime.
 
 ### Verifying Checksums
 
@@ -237,8 +244,12 @@ systemctl --user status momentum.service
 ```
 
 The service unit is sandboxed, restarts on failure, and writes only to the
-Momentum data directory. Enable lingering with `loginctl enable-linger` only
-if the service must run while the user is logged out.
+Momentum data directory. The service helper is still under lifecycle work in
+[#151](https://github.com/chrisbelyea/momentum/issues/151); use the one-off
+launcher if user systemd is unavailable or the service does not become active.
+Enable lingering with `loginctl enable-linger` only if the service must run while
+the user is logged out. See [operations.md](operations.md) for the supported
+installation and recovery procedure.
 
 #### Windows launcher and service
 
@@ -251,16 +262,14 @@ Set-ExecutionPolicy -Scope Process Bypass
 ```
 
 The installer uses `%LOCALAPPDATA%\Momentum` for the executable and
-`%APPDATA%\Momentum\momentum.db` for data. The per-user launcher creates and
+`%APPDATA%\Momentum` for per-user data. The per-user launcher creates and
 protects `%APPDATA%\Momentum\encryption.key` on first use unless
 `MOMENTUM_ENCRYPTION_KEY` is supplied. Both launchers use HTTPS port 8443 by
-default. To register an automatic Windows service, rerun from an elevated
-PowerShell prompt with
-`-RegisterService -EncryptionKey '<strong-random-key>'`; it refuses to replace
-an existing service implicitly. The installer stores the per-service database
-path, service name, and production encryption key in the SCM service
-environment. Never use `MOMENTUM_DEV_MODE=1` for a service exposed beyond local
-development.
+default. The optional Windows service registration currently has a LocalSystem
+profile-directory/permissions limitation; do not use it with default paths until
+[#142](https://github.com/chrisbelyea/momentum/issues/142) is resolved. Never
+use `MOMENTUM_DEV_MODE=1` for a service exposed beyond local development. See
+[operations.md](operations.md) for the supported per-user workflow.
 
 #### First run, upgrades, and backups
 
@@ -272,48 +281,18 @@ deployment. Restrict firewall exposure to trusted networks and bind/proxy
 accordingly.
 
 Stop the service cleanly before upgrading (`systemctl --user stop
-momentum.service`, or `Stop-Service Momentum`). Back up the SQLite database
-while the server is stopped by copying `momentum.db` and its `-wal`/`-shm`
-files together, or use SQLite's backup API. Keep a copy of the previous
-binary until the upgraded server has passed its health and task-workflow
-check. Runtime migrations are applied on startup; never replace a database
-without a tested backup.
+momentum.service`, or stop the interactive PowerShell process). Back up the
+SQLite database while the server is stopped, including `momentum.db-wal` and
+`momentum.db-shm` when present, and back up the matching encryption key. Keep a
+copy of the previous binary until the upgraded server has passed its health and
+task-workflow check. Runtime migrations are applied on startup; never replace a
+database without a tested backup. The complete fresh-install, upgrade, backup,
+restore, and rollback procedure is [documented in operations.md](operations.md).
 
-**Linux (systemd)**
-
-Create `/etc/systemd/system/momentum.service`:
-
-```ini
-[Unit]
-Description=Momentum Task Server
-After=network.target
-
-[Service]
-ExecStart=/usr/local/bin/momentum-server
-Environment="DB_PATH=/var/lib/momentum/momentum.db"
-Environment="PORT=8443"
-Environment="MOMENTUM_ENCRYPTION_KEY=<your-key>"
-WorkingDirectory=/usr/local/share/momentum
-Restart=on-failure
-User=momentum
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now momentum
-```
-
-**Windows (service)**
-
-Register the binary as a Windows service using [NSSM](https://nssm.cc/) or the built-in `sc` command:
-
-```powershell
-sc.exe create Momentum binPath= "C:\momentum\momentum-server.exe" start= auto
-sc.exe start Momentum
-```
+The old root-level systemd unit and ad-hoc `sc.exe`/NSSM examples are not a
+supported release installation path. Use the archive's native per-user helpers;
+the Windows service helper remains tracked by [#142](https://github.com/chrisbelyea/momentum/issues/142)
+and the Linux service lifecycle by [#151](https://github.com/chrisbelyea/momentum/issues/151).
 
 ---
 

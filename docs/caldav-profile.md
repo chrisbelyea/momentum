@@ -37,10 +37,14 @@ server-side sync tokens, or arbitrary calendar components. Clients should use
 the VTODO component set returned by `PROPFIND` and must not assume event or
 contact support.
 
-External CalDAV discovery and VTODO CRUD are implemented by the outbound
-client in `internal/caldav/client.go`. It requires HTTPS, validates the
-configured origin for discovered resource URLs, bounds response bodies, and
-uses ETag conditionals for updates and deletes.
+External CalDAV discovery and VTODO CRUD are implemented by the outbound client
+in `internal/caldav/client.go` and exercised by provider-compatible tests. The
+v0.2.2 release exposes configuration/validation and the CalDAV client library;
+it does not yet wire automatic external synchronization into the running server.
+Runtime integration is tracked in [#68](https://github.com/chrisbelyea/momentum/issues/68)
+and [#144](https://github.com/chrisbelyea/momentum/issues/144). The client
+requires HTTPS, validates the configured origin for discovered resource URLs,
+bounds response bodies, and uses ETag conditionals for updates and deletes.
 
 ## Compatibility verification
 

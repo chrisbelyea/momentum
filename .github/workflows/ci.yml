@@ -17,6 +17,14 @@ jobs:
       - name: Verify embedded schema is generated from canonical changelog
         run: scripts/db/generate-init-sql.sh --check
 
+  documentation-accuracy:
+    name: Release documentation contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate release documentation and archive contract
+        run: scripts/release/validate-docs.sh
+
   test:
     runs-on: ubuntu-latest
     steps:

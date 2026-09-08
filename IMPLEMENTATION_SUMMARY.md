@@ -1,5 +1,13 @@
 # External CalDAV Connection Configuration - Implementation Summary
 
+> Historical implementation summary. This records the backend configuration and
+> outbound-client library work; it is not a claim that the v0.2.2 release binary
+> automatically synchronizes external backends. Runtime synchronization remains
+> tracked in [#68](https://github.com/chrisbelyea/momentum/issues/68) and
+> [#144](https://github.com/chrisbelyea/momentum/issues/144). For current support
+> and operational procedures, see [docs/status.md](docs/status.md) and
+> [docs/operations.md](docs/operations.md).
+
 ## Overview
 
 This implementation adds support for configuring external CalDAV server connections with secure credential storage, fulfilling the requirements from:
@@ -135,17 +143,18 @@ MOMENTUM_ENCRYPTION_KEY="your-strong-random-key-here"
 ### Optional
 ```bash
 DB_PATH="momentum.db"  # Default: momentum.db
-PORT="8080"            # Default: 8080
+PORT="8443"            # Default HTTPS port
 ```
 
 ## Example Usage
 
 ### Create External CalDAV Backend
 ```bash
-curl -X POST http://localhost:8080/backends \
+# Register/login first and retain the returned session cookie.
+curl -k -X POST https://localhost:8443/backends \
+  -b cookies.txt \
   -H "Content-Type: application/json" \
   -d '{
-    "user_id": "user-123",
     "backend_type": "external_caldav",
     "name": "Nextcloud Tasks",
     "config": {
@@ -158,11 +167,11 @@ curl -X POST http://localhost:8080/backends \
 
 ### Validate Connection
 ```bash
-curl -X POST http://localhost:8080/backends/validate \
+curl -k -X POST https://localhost:8443/backends/validate \
+  -b cookies.txt \
   -H "Content-Type: application/json" \
   -d '{
     "backend_type": "external_caldav",
-    "user_id": "user-123",
     "name": "Test",
     "config": {
       "url": "https://caldav.example.com/dav",
@@ -204,4 +213,7 @@ While the current implementation meets all requirements, potential future enhanc
 
 ## Conclusion
 
-This implementation provides a complete, secure, and well-tested solution for external CalDAV connection configuration. All acceptance criteria have been met, security best practices have been followed, and the code is production-ready.
+This implementation provides the tested backend configuration, credential
+encryption, and outbound CalDAV client foundations. It does not by itself provide
+runtime external synchronization, hosted-provider certification, or a browser
+backend-settings workflow; those are tracked separately in GitHub.
