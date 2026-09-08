@@ -53,17 +53,18 @@ try {
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   const page = await context.newPage();
 
-  // Authenticate through the real server, then drive the rendered board.
-  await page.goto(`${baseURL}/health`);
-  const registration = await page.evaluate(async ({ email: address, password: secret }) => {
-    const response = await fetch('/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: address, password: secret }),
-    });
-    return { status: response.status, body: await response.text() };
-  }, { email, password });
-  assert.equal(registration.status, 201, registration.body);
+  // A clean browser profile must be able to onboard without direct API auth
+  // injection. The root navigation redirects to the first-run account page.
+  await page.goto(`${baseURL}/`);
+  assert.match(page.url(), /\/login\?/);
+  await page.getByRole('link', { name: 'Create your account' }).click();
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+    page.getByRole('button', { name: 'Create account' }).click(),
+  ]);
+  assert.equal(new URL(page.url()).pathname, '/');
 
   await page.goto(`${baseURL}/?backend_id=2`);
   assert.equal(await page.title(), 'Momentum - Kanban Board');
@@ -154,7 +155,25 @@ try {
   await page.waitForLoadState('domcontentloaded');
   await page.goto(`${baseURL}/list?backend_id=2`);
   assert.doesNotMatch(await page.locator('body').textContent(), /Concurrent device wins/);
-  console.log('Momentum browser E2E passed: authenticated board/list create, rich edit, conflict, failure reconciliation, delete');
+
+  // Logout revokes the browser session, and an invalid subsequent login is
+  // rejected before a valid sign-in restores access.
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await page.waitForURL(/\/login$/);
+  await page.goto(`${baseURL}/`);
+  assert.match(page.url(), /\/login\?/);
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill('wrong password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('alert').waitFor();
+  assert.match(await page.getByRole('alert').textContent(), /Invalid email or password/);
+  await page.getByLabel('Password').fill(password);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+    page.getByRole('button', { name: 'Sign in' }).click(),
+  ]);
+  assert.equal(new URL(page.url()).pathname, '/');
+  console.log('Momentum browser E2E passed: first-run onboarding, login failure/logout, authenticated board/list create, rich edit, conflict, failure reconciliation, delete');
   passed = true;
 } finally {
   if (browser) await browser.close();

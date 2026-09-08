@@ -18,6 +18,7 @@ import (
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrUnauthenticated    = errors.New("authentication required")
+	ErrRegistrationClosed = errors.New("registration is closed")
 )
 
 const (
@@ -38,7 +39,19 @@ func (s *Service) CreateUser(email, password string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	result, err := s.db.Exec("INSERT INTO users(email) VALUES(?)", strings.ToLower(strings.TrimSpace(email)))
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var credentialCount int
+	if err := tx.QueryRow("SELECT COUNT(*) FROM credentials WHERE type=?", credentialType).Scan(&credentialCount); err != nil {
+		return 0, err
+	}
+	if credentialCount > 0 {
+		return 0, ErrRegistrationClosed
+	}
+	result, err := tx.Exec("INSERT INTO users(email) VALUES(?)", strings.ToLower(strings.TrimSpace(email)))
 	if err != nil {
 		return 0, fmt.Errorf("create user: %w", err)
 	}
@@ -46,13 +59,28 @@ func (s *Service) CreateUser(email, password string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if _, err = s.db.Exec("INSERT INTO credentials(user_id,type,secret_hash) VALUES(?,?,?)", id, credentialType, hash); err != nil {
+	if _, err = tx.Exec("INSERT INTO credentials(user_id,type,secret_hash) VALUES(?,?,?)", id, credentialType, hash); err != nil {
 		return 0, fmt.Errorf("create credential: %w", err)
 	}
-	if _, err = s.db.Exec("INSERT INTO backends(user_id,backend_type,name) VALUES(?,?,?)", id, "internal", "Local tasks"); err != nil {
+	if _, err = tx.Exec("INSERT INTO backends(user_id,backend_type,name) VALUES(?,?,?)", id, "internal", "Local tasks"); err != nil {
 		return 0, fmt.Errorf("create default backend: %w", err)
 	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
 	return int(id), nil
+}
+
+// RegistrationAvailable reports whether this self-hosted instance still needs
+// its first password-backed account. Momentum's Phase 1 identity policy allows
+// one initial account; additional account/invitation administration is a later
+// feature rather than silently exposing open registration.
+func (s *Service) RegistrationAvailable() bool {
+	var count int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM credentials WHERE type=?", credentialType).Scan(&count); err != nil {
+		return false
+	}
+	return count == 0
 }
 
 func (s *Service) Authenticate(email, password string) (int, error) {
