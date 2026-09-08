@@ -36,12 +36,12 @@ Visit the [Releases page](https://github.com/chrisbelyea/momentum/releases) and 
 
 Each release also includes a `checksums.txt` file containing SHA-256 checksums for all archives.
 
-The current published release is the prerelease
-[`v0.2.0-rc3`](https://github.com/chrisbelyea/momentum/releases/tag/v0.2.0-rc3).
+The current published release is the stable
+[`v0.2.2`](https://github.com/chrisbelyea/momentum/releases/tag/v0.2.2).
 It contains Linux amd64/arm64, Windows amd64, and native macOS amd64/arm64
-archives. The downloaded Linux amd64 archive passed the complete 16-check
-fresh-database task workflow, and the release workflow passed the corresponding
-Windows and macOS smoke/integration jobs. Phase 1 documentation/license and
+archives. Release workflow run 34234487845 passed platform-appropriate health
+and packaged-launcher smoke plus complete fresh-database task workflows on all
+four runner platforms before publication. Phase 1 documentation/license and
 verified-publication gates (#69 and #128) are closed; the release notes document
 the supported platforms, database initialization/upgrades, TLS setup, and
 known limitations. The authenticated web workflow (#65), CalDAV
