@@ -54,6 +54,32 @@ func TestRunCycleExecutesPushAndAppliesRemoteChanges(t *testing.T) {
 	}
 }
 
+func TestRunCycleCorrelatesPushResultForUnsyncedLocalTask(t *testing.T) {
+	local := &models.Task{ID: 1, BackendID: 9, UID: "local-new", Title: "new", UpdatedAt: ptrTime(timeNow())}
+	adapter := &cycleAdapter{pull: PullResult{NextCursor: "next"}}
+	policy := RetryPolicy{MaxAttempts: 1, InitialWait: time.Nanosecond, MaxWait: time.Nanosecond, Multiplier: 2}
+	var pushed *PushResult
+	_, err := RunCycle(context.Background(), adapter, Runner{Policy: policy}, CycleInput{
+		BackendID: 9,
+		Local:     []*models.Task{local},
+	}, func(_ context.Context, action ReconcileAction, result *PushResult) error {
+		if action.Kind != ActionPush {
+			t.Fatalf("expected unsynced task to be pushed, got %s", action.Kind)
+		}
+		pushed = result
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pushed == nil || pushed.RemoteUID != local.UID {
+		t.Fatalf("push result was not correlated with local UID: %#v", pushed)
+	}
+	if len(adapter.pushes) != 1 || adapter.pushes[0].RemoteUID != local.UID {
+		t.Fatalf("adapter received unexpected remote identity: %#v", adapter.pushes)
+	}
+}
+
 func TestRunCycleRetriesPushAndNeverDeletesFromPartialPull(t *testing.T) {
 	local := &models.Task{ID: 1, BackendID: 8, UID: "local", Title: "new", UpdatedAt: ptrTime(timeNow())}
 	adapter := &cycleAdapter{pull: PullResult{HasMore: true, Entities: []RemoteEntity{{RemoteUID: "local", Task: models.Task{BackendID: 8, UID: "local", Title: "old"}, ETag: "same"}}}, pushErrors: 1}

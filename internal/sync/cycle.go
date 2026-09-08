@@ -118,6 +118,11 @@ func remoteEntityForAction(action ReconcileAction, backendID int) RemoteEntity {
 	entity := RemoteEntity{Task: models.Task{BackendID: backendID}}
 	if action.Task != nil {
 		entity.Task = *action.Task
+		// A task without an existing mapping is being created remotely. Use
+		// its canonical UID as the operation identity so the push result can
+		// be correlated with the action when the cycle is applied. Existing
+		// mappings below may replace this with the provider UID.
+		entity.RemoteUID = action.Task.UID
 	}
 	if action.Remote != nil {
 		entity.RemoteUID, entity.RemoteHref, entity.ETag, entity.RemoteSequence = action.Remote.RemoteUID, action.Remote.RemoteHref, action.Remote.ETag, action.Remote.RemoteSequence
