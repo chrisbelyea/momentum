@@ -130,10 +130,14 @@ try {
     otherPage.getByRole('button', { name: 'Save changes' }).click(),
   ]);
 
+  // Register both waits before clicking: the page reload is triggered from
+  // the response handler and can begin before a later waitForNavigation call.
+  const conflictNavigation = page.waitForNavigation({ waitUntil: 'domcontentloaded' });
   const conflictResponse = page.waitForResponse(response => response.url().includes(`/api/tasks/${taskID}`) && response.request().method() === 'PUT');
   await page.getByRole('button', { name: 'Save changes' }).click();
   assert.equal((await conflictResponse).status(), 409);
-  await page.waitForLoadState('domcontentloaded');
+  // The conflict handler schedules location.reload() after the 409 response.
+  await conflictNavigation;
   assert.match(await page.locator('body').textContent(), /Concurrent device wins/);
   assert.doesNotMatch(await page.locator('body').textContent(), /Stale overwrite must fail/);
   await otherContext.close();
