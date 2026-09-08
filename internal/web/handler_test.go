@@ -217,6 +217,7 @@ func TestBoardRendersAccessibleRichTaskEditor(t *testing.T) {
 		`id="edit-description"`, `id="edit-due"`, `id="edit-priority"`, `id="edit-tags"`,
 		`data-description="Review launch checklist"`, `data-due-at="2026-12-31"`, `data-priority="2"`,
 		`description: description || null`, `due_date_only: Boolean(due)`, `tags_json: tags.length ? JSON.stringify(tags) : null`,
+		`<input type="hidden" name="backend_id" value="1">`, `href="/?backend_id=1"`,
 	} {
 		if !strings.Contains(body, required) {
 			t.Errorf("board is missing rich editor invariant %q", required)
@@ -224,6 +225,26 @@ func TestBoardRendersAccessibleRichTaskEditor(t *testing.T) {
 	}
 	if strings.Contains(body, "alert(") {
 		t.Fatal("board mutations must announce errors through ARIA live regions, not alert()")
+	}
+}
+
+func TestListFilterPreservesSelectedBackend(t *testing.T) {
+	database := setupTestDB(t)
+	defer database.Close()
+	if _, err := database.Exec("INSERT INTO backends (id,user_id,backend_type,name) VALUES (2,1,'internal','Second backend')"); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewHandler(db.NewTaskRepository(database), db.NewBackendRepository(database))
+	rec := httptest.NewRecorder()
+	handler.HandleList(rec, httptest.NewRequest(http.MethodGet, "/list?backend_id=2&status=IN-PROCESS&tag=launch", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list returned %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, required := range []string{`<input type="hidden" name="backend_id" value="2">`, `href="/list?backend_id=2"`} {
+		if !strings.Contains(body, required) {
+			t.Errorf("list filter is missing backend state %q", required)
+		}
 	}
 }
 
