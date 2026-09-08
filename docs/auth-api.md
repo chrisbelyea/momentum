@@ -7,7 +7,11 @@ must include a same-origin `Origin` (or omit it for a non-browser client).
 
 ## First account
 
-`POST /auth/register` is available only while the database has no user. The
+`POST /auth/register` is available only while the database has no
+password-backed account. On a fresh database, or on a pre-authentication
+database containing the single password-less compatibility user, registration
+adopts that local identity so its existing backend and tasks remain available.
+The
 JSON body is:
 
 ```json
@@ -15,10 +19,11 @@ JSON body is:
 ```
 
 On success the response is `201 Created`, sets the `momentum_session` cookie,
-and returns `{"user_id": 2}` (the exact ID is database-generated). Registration
-also creates the private `Local tasks` backend. Invalid input returns `400`; a
-cross-origin mutation returns `403`; once an account exists registration returns
-`403` with `registration closed`.
+and returns `{"user_id": <id>}` (the ID is database-generated). Registration
+creates the private `Local tasks` backend when the adopted identity does not
+already have one. Invalid input returns `400`; a cross-origin mutation returns
+`403`; once an account exists registration returns `403` with `registration
+closed`.
 
 The browser equivalent is the rendered `/register` page. It redirects to the
 requested safe relative return URL after creating the session.
@@ -46,4 +51,7 @@ The browser equivalent is the same-origin `/logout` form, which redirects to
 
 Protected HTML, task, backend, and synchronization routes require the cookie.
 `GET /health` is the unauthenticated readiness endpoint. Do not log cookie
-values, passwords, or backend credentials.
+values, passwords, or backend credentials. Production deployments must use
+trusted TLS certificate/key files and set `MOMENTUM_ENCRYPTION_KEY`; the
+self-signed development certificate and `MOMENTUM_DEV_MODE` are for local
+development and tests only.

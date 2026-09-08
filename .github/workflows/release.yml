@@ -16,6 +16,8 @@ jobs:
         with: { fetch-depth: 0 }
       - name: Verify canonical embedded schema
         run: scripts/db/generate-init-sql.sh --check
+      - name: Verify authentication API documentation
+        run: scripts/release/validate-auth-docs.sh
       - name: Build draft release
         env: { GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
         run: |
