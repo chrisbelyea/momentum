@@ -26,11 +26,8 @@ if ([string]::IsNullOrWhiteSpace($env:MOMENTUM_ENCRYPTION_KEY)) {
         try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
         $env:MOMENTUM_ENCRYPTION_KEY = [Convert]::ToBase64String($bytes)
         [System.IO.File]::WriteAllText($EncryptionKeyFile, $env:MOMENTUM_ENCRYPTION_KEY, [System.Text.UTF8Encoding]::new($false))
-        $acl = Get-Acl -LiteralPath $EncryptionKeyFile
-        $acl.SetAccessRuleProtection($true, $false)
-        $rule = [System.Security.AccessControl.FileSystemAccessRule]::new($env:USERNAME, 'FullControl', 'Allow')
-        $acl.SetAccessRule($rule)
-        Set-Acl -LiteralPath $EncryptionKeyFile -AclObject $acl
+        & icacls.exe $EncryptionKeyFile /inheritance:r /grant:r "$($env:USERNAME):(F)" | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Could not restrict encryption key permissions: $EncryptionKeyFile" }
     }
 }
 if ([string]::IsNullOrWhiteSpace($env:MOMENTUM_ENCRYPTION_KEY)) {
