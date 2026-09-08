@@ -17,6 +17,16 @@ jobs:
       - name: Verify embedded schema is generated from canonical changelog
         run: scripts/db/generate-init-sql.sh --check
 
+  pwa-validation:
+    name: PWA asset and archive validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the distributable PWA archive
+        run: scripts/release/build-pwa.sh
+      - name: Validate source assets and exact archive contents
+        run: scripts/release/validate-pwa.sh dist/web.tar.gz
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -82,6 +92,31 @@ jobs:
       - name: Exercise authenticated board/list workflow
         env:
           MOMENTUM_E2E_BINARY: ${{ github.workspace }}/bin/momentum-server
+        run: npm run test:e2e
+
+  web-browser-e2e-windows:
+    name: PWA/browser workflow (Windows Chromium)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Build release binary for Windows browser workflow
+        shell: pwsh
+        run: go build -trimpath -o bin/momentum-server.exe ./cmd/server
+      - name: Install pinned browser test dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install chromium
+      - name: Exercise authenticated PWA and task workflow
+        env:
+          MOMENTUM_E2E_BINARY: ${{ github.workspace }}/bin/momentum-server.exe
         run: npm run test:e2e
 
   caldav-radicale-interop:

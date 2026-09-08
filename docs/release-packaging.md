@@ -360,16 +360,19 @@ The server binary embeds the templates and static assets at build time and serve
 
 ### PWA installability checklist
 
-A browser will offer "Add to Home Screen" / install prompt when:
+A current Chromium-based browser can offer "Install" when:
 
 - [x] `manifest.json` is served at `/static/manifest.json`
 - [x] `<link rel="manifest">` is present in the HTML
 - [x] App icons (192×192 and 512×512 PNG) are included in `web/static/` and listed in `manifest.json`
 - [ ] The server is accessed over HTTPS (required in production; `localhost` is exempt)
 
-The repository and release-binary checks verify the manifest, icons, and
-same-origin static-asset service worker. Browser-level installability remains
-unverified; see [the documented PWA scope](pwa.md).
+The repository, release-archive, and release-binary checks verify the
+manifest, icons, root-scoped service worker, and static-only cache policy.
+Chromium browser CI verifies registration/update behavior and the documented
+offline boundary on Ubuntu and Windows. The browser’s install prompt is
+user-agent UI and is not asserted by automation; see [the documented PWA
+scope](pwa.md).
 
 ---
 
