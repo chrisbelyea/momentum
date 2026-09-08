@@ -6,9 +6,11 @@ account page, where you create the instance's first account. The password must
 contain at least 12 characters. No default password is created.
 
 After registration Momentum signs you in and creates the private `Local tasks`
-backend. The board supports task creation, editing, status changes, and
-deletion. Use **Sign out** in the board or list navigation to revoke the
-session; return to `/` to sign in again.
+backend. On a fresh or pre-authentication database, the first account adopts
+the existing password-less local identity and its tasks instead of creating a
+second inaccessible backend. The board supports task creation, editing, status
+changes, and deletion. Use **Sign out** in the board or list navigation to
+revoke the session; return to `/` to sign in again.
 
 Registration is intentionally first-account-only in Phase 1. This prevents a
 packaged server from becoming an open account-registration service. Additional
