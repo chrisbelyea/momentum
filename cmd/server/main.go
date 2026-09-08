@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -44,6 +46,11 @@ func runServer(stop <-chan os.Signal) {
 		log.Fatalf("Failed to determine database path: %v", err)
 	}
 	port := getEnv("PORT", "8443")
+	addr, err := configuredListenAddress(port)
+	if err != nil {
+		log.Fatalf("Invalid listen configuration: %v", err)
+	}
+	listenHost, _, _ := net.SplitHostPort(addr)
 	tlsCert := os.Getenv("TLS_CERT")
 	tlsKey := os.Getenv("TLS_KEY")
 	httpRedirectPort := os.Getenv("HTTP_REDIRECT_PORT")
@@ -200,7 +207,10 @@ func runServer(stop <-chan os.Signal) {
 			}
 		}
 
-		redirectAddr := fmt.Sprintf(":%s", httpRedirectPort)
+		redirectAddr, err := configuredListenAddress(httpRedirectPort)
+		if err != nil {
+			log.Fatalf("Invalid HTTP redirect listen configuration: %v", err)
+		}
 		go func() {
 			ln, err := net.Listen("tcp", redirectAddr)
 			if err != nil {
@@ -226,9 +236,8 @@ func runServer(stop <-chan os.Signal) {
 	}
 
 	// Start TLS server — TLS 1.3 minimum, strong cipher suites enforced by Go's crypto/tls.
-	addr := fmt.Sprintf(":%s", port)
 	log.Printf("Starting Momentum %s on %s (TLS)", version, addr)
-	log.Printf("Listening on https://localhost:%s", port)
+	log.Printf("Listening on https://%s", net.JoinHostPort(listenHost, port))
 	log.Printf("Database: %s", dbPath)
 
 	server := &http.Server{
@@ -268,4 +277,20 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// configuredListenAddress returns a validated TCP listen address. Loopback is
+// the safe default because packaged development certificates authenticate only
+// localhost/loopback. Operators may explicitly opt into a hostname or IP via
+// LISTEN_ADDR when a trusted certificate and network controls are in place.
+func configuredListenAddress(port string) (string, error) {
+	host := strings.TrimSpace(getEnv("LISTEN_ADDR", "127.0.0.1"))
+	if host == "" || strings.ContainsAny(host, "\r\n/\\") {
+		return "", fmt.Errorf("LISTEN_ADDR must be a non-empty hostname or IP address")
+	}
+	portNumber, err := strconv.Atoi(strings.TrimSpace(port))
+	if err != nil || portNumber < 1 || portNumber > 65535 {
+		return "", fmt.Errorf("PORT must be an integer between 1 and 65535")
+	}
+	return net.JoinHostPort(host, strconv.Itoa(portNumber)), nil
 }
