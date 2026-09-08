@@ -36,7 +36,7 @@ for _ in $(seq 1 20); do
 		XDG_CONFIG_HOME="${TEMP_DIR}/config" \
 			MOMENTUM_INSTALL_DIR="${install_root}/bin" \
 			MOMENTUM_DATA_DIR="${install_data}" \
-			"$(dirname "${BASH_SOURCE[0]}")/install-user.sh" "${BINARY}" \
+			"$(dirname "${BASH_SOURCE[0]}")/install-user.sh" --install-only "${BINARY}" \
 			>"${TEMP_DIR}/install.log" 2>&1
 		service_file="${TEMP_DIR}/config/systemd/user/momentum.service"
 		[[ -x "${install_root}/bin/momentum-server" ]] || { echo 'installer did not install binary' >&2; exit 1; }

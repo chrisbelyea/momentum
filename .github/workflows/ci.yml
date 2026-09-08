@@ -43,6 +43,35 @@ jobs:
       - name: Exercise first-run launcher
         run: scripts/packaging/linux/test-launcher.sh "$GITHUB_WORKSPACE/bin/momentum-server"
 
+  packaging-linux-systemd:
+    name: Linux systemd user-service lifecycle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go build -trimpath -o bin/momentum-server ./cmd/server
+      - name: Start a real lingering user systemd manager
+        run: |
+          set -euo pipefail
+          sudo loginctl enable-linger "$USER"
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+          for _ in $(seq 1 30); do
+            systemctl --user show-environment >/dev/null 2>&1 && exit 0
+            sleep 1
+          done
+          systemctl --user status --no-pager || true
+          exit 1
+      - name: Exercise install, task workflow, restart, upgrade, and uninstall
+        run: |
+          set -euo pipefail
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+          scripts/packaging/linux/test-systemd-service.sh "$GITHUB_WORKSPACE/bin/momentum-server"
+
   packaging-windows-launcher:
     name: Windows packaged launcher
     runs-on: windows-latest
