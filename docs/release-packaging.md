@@ -223,7 +223,12 @@ For a one-off launch from an extracted archive:
 
 The launcher creates `${XDG_CONFIG_HOME:-$HOME/.config}/Momentum` with mode
 700 and sets `DB_PATH` to `momentum.db` in that directory. `MOMENTUM_DATA_DIR`,
-`DB_PATH`, and `PORT` may be set explicitly. To install a user service (no
+`DB_PATH`, `MOMENTUM_ENCRYPTION_KEY_FILE`, and `PORT` may be set explicitly.
+The first launch creates a random per-user encryption key at
+`encryption.key` with mode 600 and reuses it on later launches; provide
+`MOMENTUM_ENCRYPTION_KEY` instead when an externally managed key is required.
+The launcher and service listen on HTTPS port 8443 by default. To install a
+user service (no
 `sudo` required):
 
 ```bash
@@ -242,21 +247,20 @@ From PowerShell in an extracted release directory:
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\packaging\windows\Install-Momentum.ps1 -BinaryPath .\momentum-server.exe
-.\Momentum\Run-Momentum.ps1
+& "$env:LOCALAPPDATA\Momentum\Run-Momentum.ps1"
 ```
 
 The installer uses `%LOCALAPPDATA%\Momentum` for the executable and
-`%APPDATA%\Momentum\momentum.db` for data. To register an automatic Windows
-service, rerun from an elevated PowerShell prompt with
+`%APPDATA%\Momentum\momentum.db` for data. The per-user launcher creates and
+protects `%APPDATA%\Momentum\encryption.key` on first use unless
+`MOMENTUM_ENCRYPTION_KEY` is supplied. Both launchers use HTTPS port 8443 by
+default. To register an automatic Windows service, rerun from an elevated
+PowerShell prompt with
 `-RegisterService -EncryptionKey '<strong-random-key>'`; it refuses to replace
 an existing service implicitly. The installer stores the per-service database
 path, service name, and production encryption key in the SCM service
 environment. Never use `MOMENTUM_DEV_MODE=1` for a service exposed beyond local
 development.
-
-The service and launcher both listen on HTTPS port 8443 by default. The service uses
-the installer-selected data directory; use the launcher when a custom `PORT`
-or `DB_PATH` is required.
 
 #### First run, upgrades, and backups
 

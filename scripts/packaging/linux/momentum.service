@@ -5,16 +5,15 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/momentum-server
-Environment=DB_PATH=%h/.config/Momentum/momentum.db
-Environment=PORT=8080
+ExecStart=@MOMENTUM_BINARY@
+EnvironmentFile=-@MOMENTUM_ENV_FILE@
 Restart=on-failure
 RestartSec=5s
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=%h/.config/Momentum
+ReadWritePaths=@MOMENTUM_DATA_DIR@
 
 [Install]
 WantedBy=default.target

@@ -40,6 +40,8 @@ if ($RegisterService) {
     New-ItemProperty -Path $serviceKey -Name Environment -PropertyType MultiString -Force -Value @(
         "MOMENTUM_SERVICE_NAME=$ServiceName",
         "DB_PATH=$(Join-Path $DataDirectory 'momentum.db')",
+        "PORT=8443",
+        "MOMENTUM_DEV_CERT_DIR=$(Join-Path $DataDirectory 'dev-certs')",
         "MOMENTUM_ENCRYPTION_KEY=$EncryptionKey"
     ) | Out-Null
     Start-Service -Name $ServiceName

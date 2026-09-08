@@ -30,6 +30,35 @@ jobs:
       - run: go test -race ./...
       - run: go build -o bin/momentum-server ./cmd/server
 
+  packaging-linux-launcher:
+    name: Linux packaged launcher
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go build -trimpath -o bin/momentum-server ./cmd/server
+      - name: Exercise first-run launcher
+        run: scripts/packaging/linux/test-launcher.sh "$GITHUB_WORKSPACE/bin/momentum-server"
+
+  packaging-windows-launcher:
+    name: Windows packaged launcher
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go build -trimpath -o bin/momentum-server.exe ./cmd/server
+      - name: Exercise first-run launcher
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/packaging/windows/Test-Launcher.ps1 `
+            -BinaryPath "$PWD/bin/momentum-server.exe"
+
   web-browser-e2e:
     name: Browser workflow (Chromium)
     runs-on: ubuntu-latest

@@ -11,6 +11,14 @@ import (
 	"time"
 )
 
+func TestDevCertDir_Override(t *testing.T) {
+	override := t.TempDir()
+	t.Setenv("MOMENTUM_DEV_CERT_DIR", override)
+	if got := DevCertDir(); got != override {
+		t.Fatalf("DevCertDir() = %q, want override %q", got, override)
+	}
+}
+
 func TestGetOrCreateDevCert_NewCert(t *testing.T) {
 	certDir := t.TempDir()
 
