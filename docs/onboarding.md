@@ -15,7 +15,8 @@ packaged server from becoming an open account-registration service. Additional
 accounts and invitations require a separately designed administration flow.
 The JSON endpoints (`/auth/register`, `/auth/login`, and `/auth/logout`) remain
 available for compatible clients, but browser users should use the rendered
-pages.
+pages. Their request, response, cookie, status, and first-account rules are
+defined in the [authentication API contract](auth-api.md).
 
 The development certificate is self-signed. Accept the browser's explicit
 warning for local use, or configure a trusted certificate as described in
