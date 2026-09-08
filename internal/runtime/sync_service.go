@@ -137,7 +137,28 @@ func (s *Service) RunBackend(ctx context.Context, backendID int) (Result, error)
 	if err != nil {
 		return Result{}, err
 	}
-	cycle, err := syncengine.RunCycle(ctx, adapter, s.runner, syncengine.CycleInput{
+	// Persist each provider attempt as it happens. These rows survive a
+	// process interruption even when the cycle never reaches ApplyCycle, so a
+	// restart can explain and account for partial work rather than presenting
+	// an unexplained checkpoint transition.
+	runner := s.runner
+	observerContext := context.WithoutCancel(ctx)
+	runner.Observer = func(event syncengine.SyncEvent) {
+		operation := db.SyncOperation{
+			BackendID: event.BackendID,
+			Direction: event.Operation,
+			Operation: event.Operation,
+			Outcome:   event.Outcome,
+			Error:     event.Error,
+			Attempts:  event.Attempt,
+		}
+		if event.Outcome == "success" || event.Outcome == "failure" {
+			now := time.Now().UTC()
+			operation.CompletedAt = &now
+		}
+		_ = s.syncRepo.RecordOperation(observerContext, operation)
+	}
+	cycle, err := syncengine.RunCycle(ctx, adapter, runner, syncengine.CycleInput{
 		BackendID: backendID,
 		Cursor:    inputCheckpoint.Cursor,
 		Local:     tasks,

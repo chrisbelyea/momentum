@@ -81,6 +81,13 @@ func TestRunBackendPushesLocalTaskAndPersistsCheckpoint(t *testing.T) {
 	if len(entities) != 1 || entities[0].RemoteUID == "" || entities[0].RemoteETag != `"v1"` {
 		t.Fatalf("local push mapping was not persisted: %#v", entities)
 	}
+	var operations int
+	if err := database.QueryRow("SELECT count(*) FROM sync_operations WHERE backend_id=?", backend.ID).Scan(&operations); err != nil {
+		t.Fatal(err)
+	}
+	if operations < 2 {
+		t.Fatalf("runtime provider attempts were not persisted (got %d, want at least pull and push)", operations)
+	}
 }
 
 func TestHandleStatusRequiresOwnership(t *testing.T) {

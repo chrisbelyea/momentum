@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/chrisbelyea/momentum/internal/models"
@@ -89,6 +90,27 @@ type SyncConflict struct {
 type SyncRepository struct{ db *sql.DB }
 
 func NewSyncRepository(db *sql.DB) *SyncRepository { return &SyncRepository{db: db} }
+
+// RecordOperation appends one provider attempt without advancing the
+// checkpoint. Runtime observers use this for durable attempt/outcome history;
+// the checkpoint and reconciliation rows are still committed atomically by
+// ApplyBatch after a complete cycle.
+func (r *SyncRepository) RecordOperation(ctx context.Context, operation SyncOperation) error {
+	if operation.BackendID <= 0 || strings.TrimSpace(operation.Operation) == "" {
+		return fmt.Errorf("invalid sync operation")
+	}
+	if strings.TrimSpace(operation.Direction) == "" {
+		operation.Direction = operation.Operation
+	}
+	if strings.TrimSpace(operation.Outcome) == "" {
+		operation.Outcome = "failure"
+	}
+	_, err := r.db.ExecContext(ctx, `INSERT INTO sync_operations(backend_id,entity_id,direction,operation,outcome,error,attempts,next_attempt_at,completed_at) VALUES(?,?,?,?,?,?,?,?,?)`, operation.BackendID, operation.EntityID, operation.Direction, operation.Operation, operation.Outcome, operation.Error, operation.Attempts, operation.NextAttemptAt, operation.CompletedAt)
+	if err != nil {
+		return fmt.Errorf("record sync operation: %w", err)
+	}
+	return nil
+}
 
 // ListConflicts returns retained conflict evidence for backends owned by a
 // user. An empty status lists every conflict; callers normally request
