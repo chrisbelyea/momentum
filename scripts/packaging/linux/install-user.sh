@@ -97,6 +97,9 @@ chmod 600 "${ENV_FILE}"
 
 escape_unit_path() {
 	local value="$1"
+	# Unit directives expand %specifiers. Preserve literal percent signs in
+	# user-selected paths (%% is systemd's escaped percent spelling).
+	value=${value//%/%%}
 	value=${value//\\/\\x5c}
 	value=${value// /\\x20}
 	value=${value//$'\t'/\\x09}
