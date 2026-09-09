@@ -257,7 +257,8 @@ protects `%APPDATA%\Momentum\encryption.key` on first use unless
 default. To register an automatic Windows service, rerun from an elevated
 PowerShell prompt with
 `-RegisterService -EncryptionKey '<strong-random-key>'`; it refuses to replace
-an existing service implicitly. Service mode defaults to the LocalSystem
+an existing service implicitly. Pass `-Port <port>` when the default HTTPS
+port 8443 is unavailable. Service mode defaults to the LocalSystem
 identity, `%ProgramFiles%\Momentum` for the executable, and
 `%ProgramData%\Momentum` for the database and development certificate. The
 installer grants that service identity the required access to those paths and

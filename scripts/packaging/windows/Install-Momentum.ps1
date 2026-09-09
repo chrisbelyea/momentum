@@ -7,6 +7,7 @@ param(
     [string]$DataDirectory = (Join-Path $env:APPDATA 'Momentum'),
     [switch]$RegisterService,
     [string]$ServiceName = 'Momentum',
+    [ValidateRange(1, 65535)] [int]$Port = 8443,
     [string]$EncryptionKey
 )
 
@@ -62,7 +63,7 @@ if ($RegisterService) {
     New-ItemProperty -Path $serviceKey -Name Environment -PropertyType MultiString -Force -Value @(
         "MOMENTUM_SERVICE_NAME=$ServiceName",
         "DB_PATH=$(Join-Path $DataDirectory 'momentum.db')",
-        "PORT=8443",
+        "PORT=$Port",
         "MOMENTUM_DEV_CERT_DIR=$(Join-Path $DataDirectory 'dev-certs')",
         "MOMENTUM_ENCRYPTION_KEY=$EncryptionKey"
     ) | Out-Null
