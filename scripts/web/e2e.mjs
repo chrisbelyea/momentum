@@ -65,9 +65,10 @@ try {
   }, { email, password });
   assert.equal(registration.status, 201, registration.body);
 
-  await page.goto(`${baseURL}/?backend_id=2`);
+  await page.goto(`${baseURL}/`);
   assert.equal(await page.title(), 'Momentum - Kanban Board');
-  assert.equal(await page.locator('#task-backend').inputValue(), '2');
+  const backendID = await page.locator('#task-backend').inputValue();
+  assert.ok(backendID, 'registration should select the local backend');
   assert.equal(await page.locator('.task-card').count(), 0);
 
   // Create a second owned backend for the URL-state regression. Filtering a
@@ -145,21 +146,21 @@ try {
   assert.equal(await updatedCard.getAttribute('data-status'), 'IN-PROCESS');
 
   // The list view is a separate rendered workflow and preserves backend state.
-  await page.goto(`${baseURL}/list?backend_id=2&tag=verified&sort=title&order=asc`);
-  assert.equal(new URL(page.url()).searchParams.get('backend_id'), '2');
+  await page.goto(`${baseURL}/list?backend_id=${backendID}&tag=verified&sort=title&order=asc`);
+  assert.equal(new URL(page.url()).searchParams.get('backend_id'), backendID);
   assert.match(await page.locator('body').textContent(), /Browser workflow updated/);
 
   // Keep the first context stale while a second browser context changes the
   // task. The stale first context must receive 409 and reconcile instead of
   // silently overwriting that change.
-  await page.goto(`${baseURL}/?backend_id=2`);
+  await page.goto(`${baseURL}/?backend_id=${backendID}`);
   const staleCard = page.locator('.task-card', { hasText: 'Browser workflow updated' });
   await staleCard.getByRole('button', { name: 'Edit' }).click();
   await page.locator('#edit-title').fill('Stale overwrite must fail');
 
   const otherContext = await browser.newContext({ ignoreHTTPSErrors: true, storageState: await context.storageState() });
   const otherPage = await otherContext.newPage();
-  await otherPage.goto(`${baseURL}/?backend_id=2`);
+  await otherPage.goto(`${baseURL}/?backend_id=${backendID}`);
   const otherCard = otherPage.locator('.task-card', { hasText: 'Browser workflow updated' });
   await otherCard.getByRole('button', { name: 'Edit' }).click();
   await otherPage.locator('#edit-title').fill('Concurrent device wins');
@@ -178,7 +179,7 @@ try {
 
   // A failed status mutation must reload the board to the server state rather
   // than leave the optimistic card in the wrong column.
-  await page.goto(`${baseURL}/?backend_id=2`);
+  await page.goto(`${baseURL}/?backend_id=${backendID}`);
   const failedCard = page.locator('.task-card', { hasText: 'Concurrent device wins' });
   await page.route(`**/api/tasks/${taskID}/status`, route => route.fulfill({ status: 503, body: 'simulated outage' }));
   await failedCard.dragTo(page.locator('#done-column'));
@@ -188,9 +189,11 @@ try {
   assert.equal(await reconciledCard.getAttribute('data-status'), 'IN-PROCESS');
 
   // Delete through the visible board control and verify it is gone in list.
-  await reconciledCard.getByRole('button', { name: 'Delete' }).click();
-  await page.waitForLoadState('domcontentloaded');
-  await page.goto(`${baseURL}/list?backend_id=2`);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+    reconciledCard.getByRole('button', { name: 'Delete' }).click(),
+  ]);
+  await page.goto(`${baseURL}/list?backend_id=${backendID}`);
   assert.doesNotMatch(await page.locator('body').textContent(), /Concurrent device wins/);
   console.log('Momentum browser E2E passed: authenticated board/list create, rich edit, conflict, failure reconciliation, delete');
   passed = true;
