@@ -4,7 +4,7 @@ This is the human-readable mirror of the Momentum GitHub Project. Issue
 acceptance criteria and passing CI are authoritative; this page does not turn
 planned or Draft work into a completion claim.
 
-> Last audited: 2026-09-08 (main `b9ab696`, stable release `v0.2.2`)
+> Last audited: 2026-09-12 (main `b9ab696`, stable release `v0.2.2`)
 
 ## Current release
 
@@ -38,7 +38,7 @@ The following issues are open and remain In Progress in the GitHub Project:
 - #144/#68 — runtime external CalDAV synchronization ([PR #159](https://github.com/chrisbelyea/momentum/pull/159)).
 - #146 — browser backend setup and validation ([PR #161](https://github.com/chrisbelyea/momentum/pull/161)).
 - #150 — Windows/Linux Chromium PWA validation ([PR #164](https://github.com/chrisbelyea/momentum/pull/164)).
-- #165 — preserve existing local data during first-account onboarding ([PR #158](https://github.com/chrisbelyea/momentum/pull/158)).
+- #167 — preserve existing local data during first-account onboarding ([PR #158](https://github.com/chrisbelyea/momentum/pull/158)).
 - #166 — preserve backend selection in board/list filters ([PR #168](https://github.com/chrisbelyea/momentum/pull/168)).
 - #69 — documentation and release procedure reconciliation ([PR #163](https://github.com/chrisbelyea/momentum/pull/163)).
 
@@ -60,7 +60,8 @@ Additional open P1/P2 work includes:
 - #63 — finish the authentication/onboarding acceptance audit.
 - #65 — finish the complete browser task-management acceptance audit.
 - #69 — reconcile all operational documentation and release procedures.
-- #167 — publish the authentication API contract (being added to PR #158).
+- #165 — publish the authentication API contract (being added to PR #158).
+- #167 — preserve existing local data during first-account onboarding.
 
 The native-client/provider sequence (#71, #130–#136) is deliberately deferred
 until the Phase 1 server/PWA is complete. Those issues are planning milestones,
