@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFile as execFileCallback, spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { openSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:https';
+import { promisify } from 'node:util';
 import { chromium } from 'playwright';
 
+const execFile = promisify(execFileCallback);
 const binary = process.env.MOMENTUM_E2E_BINARY || join(process.cwd(), 'bin', 'momentum-server');
 const port = Number(process.env.MOMENTUM_E2E_PORT || 18444);
 const baseURL = `https://localhost:${port}`;
@@ -182,7 +184,23 @@ try {
     page.getByRole('button', { name: 'Sign in' }).click(),
   ]);
   assert.equal(new URL(page.url()).pathname, '/');
-  console.log('Momentum browser E2E passed: first-run onboarding, login failure/logout, authenticated board/list create, rich edit, conflict, failure reconciliation, delete');
+
+  // Expire the active session in the test database and verify that browser
+  // navigation treats it like a revoked session. Python's stdlib sqlite3 is
+  // available on the Ubuntu browser runner and avoids adding a production
+  // database dependency just for this assertion.
+  await execFile('python3', ['-c', `
+import sqlite3
+import sys
+connection = sqlite3.connect(sys.argv[1])
+connection.execute("UPDATE sessions SET expires_at = CURRENT_TIMESTAMP")
+connection.commit()
+connection.close()
+`, dbPath]);
+  await page.goto(`${baseURL}/`);
+  assert.match(page.url(), /\/login\?/);
+
+  console.log('Momentum browser E2E passed: first-run onboarding, login failure/logout, expired-session route protection, authenticated board/list create, rich edit, conflict, failure reconciliation, delete');
   passed = true;
 } finally {
   if (browser) await browser.close();
