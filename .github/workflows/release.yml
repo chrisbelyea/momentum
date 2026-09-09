@@ -187,7 +187,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: Expand-Archive -Path "${{ matrix.artifact }}" -DestinationPath . -Force
-      - run: chmod +x scripts/release/integration-test.sh
+      - name: Prepare integration script
+        shell: bash
+        run: chmod +x scripts/release/integration-test.sh
       - name: Run complete fresh-database workflow
         shell: bash
         run: scripts/release/integration-test.sh "$(find . -type f -name '${{ matrix.binary }}' -print -quit)"
