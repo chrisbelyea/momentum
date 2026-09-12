@@ -262,6 +262,10 @@ path, service name, and production encryption key in the SCM service
 environment. Never use `MOMENTUM_DEV_MODE=1` for a service exposed beyond local
 development.
 
+The packaged launcher checks are safe to run from installation and temporary
+directories whose Windows paths contain spaces; keep those paths intact when
+customizing `-InstallDirectory` or `-DataDirectory`.
+
 #### First run, upgrades, and backups
 
 The development TLS certificate is self-signed. On first run, open the URL

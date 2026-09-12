@@ -13,4 +13,9 @@ grep -q 'MOMENTUM_ENCRYPTION_KEY' "${ROOT}/scripts/packaging/windows/Run-Momentu
 grep -q '\[string\]\$EncryptionKey' "${ROOT}/scripts/packaging/windows/Install-Momentum.ps1"
 grep -q 'MOMENTUM_SERVICE_NAME' "${ROOT}/scripts/packaging/windows/Install-Momentum.ps1"
 test -f "${ROOT}/scripts/packaging/windows/Test-Launcher.ps1"
+grep -q 'ConvertTo-ProcessArgument' "${ROOT}/scripts/packaging/windows/Test-Launcher.ps1"
+if grep -Eq "'-File',[[:space:]]*\$LauncherPath|'-BinaryPath',[[:space:]]*\$BinaryPath|'-DataDirectory',[[:space:]]*\$dataDirectory" "${ROOT}/scripts/packaging/windows/Test-Launcher.ps1"; then
+  echo 'Windows launcher test passes unquoted path arguments to Start-Process.' >&2
+  exit 1
+fi
 echo 'Native packaging files validated.'
