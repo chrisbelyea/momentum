@@ -26,7 +26,6 @@ function Invoke-JsonRequest {
         Uri = "$BaseUrl$Path"
         Method = $Method
         WebSession = $session
-        SkipCertificateCheck = $true
         UseBasicParsing = $true
         ErrorAction = 'Stop'
     }
