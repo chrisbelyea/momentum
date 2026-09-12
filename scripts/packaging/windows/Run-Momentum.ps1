@@ -12,7 +12,18 @@ if (-not (Test-Path -LiteralPath $BinaryPath -PathType Leaf)) {
     throw "Momentum binary was not found: $BinaryPath"
 }
 
+# PowerShell evaluates parameter defaults independently. If callers override
+# DataDirectory without supplying a key path, derive the key from that same
+# directory instead of retaining the default user's APPDATA path.
+if (-not $PSBoundParameters.ContainsKey('EncryptionKeyFile')) {
+    $EncryptionKeyFile = Join-Path $DataDirectory 'encryption.key'
+}
+
 New-Item -ItemType Directory -Force -Path $DataDirectory | Out-Null
+$keyParent = Split-Path -Parent -Path $EncryptionKeyFile
+if (-not [string]::IsNullOrWhiteSpace($keyParent)) {
+    New-Item -ItemType Directory -Force -Path $keyParent | Out-Null
+}
 $env:DB_PATH = Join-Path $DataDirectory 'momentum.db'
 $env:PORT = [string]$Port
 $env:MOMENTUM_DEV_CERT_DIR = Join-Path $DataDirectory 'dev-certs'
