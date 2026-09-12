@@ -27,6 +27,13 @@ grep -q 'docs/operations.md' "${ROOT}/.github/workflows/release.yml"
 grep -q 'LICENSE' "${ROOT}/.goreleaser.yml"
 grep -q 'LICENSE' "${ROOT}/.github/workflows/release.yml"
 
+# The packaged server uses IPv4 loopback by default. Keep automated health
+# probes on that same address so localhost IPv6-first resolution cannot make
+# a healthy service look unavailable on Windows or Linux.
+grep -q 'BASE_URL="https://127.0.0.1:${PORT}"' "${ROOT}/scripts/release/integration-test.sh"
+grep -q 'https://127.0.0.1:8443/health' "${ROOT}/.github/workflows/ci.yml"
+grep -q 'https://127.0.0.1:8443/health' "${ROOT}/.github/workflows/release.yml"
+
 # These are contributor-facing rules. A positive Liquibase workflow here would
 # direct future changes to a schema source that is not used by the release
 # binary; a prohibition that names the retired system is valid documentation.
