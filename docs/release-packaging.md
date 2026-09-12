@@ -232,13 +232,38 @@ user service (no
 `sudo` required):
 
 ```bash
-./scripts/packaging/linux/install-user.sh ./momentum-server
+./scripts/packaging/linux/install-user.sh --activate ./momentum-server
 systemctl --user status momentum.service
 ```
 
-The service unit is sandboxed, restarts on failure, and writes only to the
-Momentum data directory. Enable lingering with `loginctl enable-linger` only
-if the service must run while the user is logged out.
+The installer writes the executable, key, environment, and sandboxed unit. By
+default it then reloads, enables, and starts the per-user service; any reload,
+activation, or post-activation `is-active` failure returns a non-zero exit
+code. Use `--install-only` when files should be staged without contacting the
+user systemd manager, and run `systemctl --user enable --now momentum.service`
+separately. `--activate` requires `systemctl` and fails if activation cannot
+be completed. Set `MOMENTUM_SERVICE_NAME` to install an isolated unit name
+(ending in `.service`) when running a second instance. The service unit is
+sandboxed, restarts on failure, and writes only to the Momentum data
+directory. Enable lingering with `loginctl enable-linger` only if the service
+must run while the user is logged out.
+
+To remove the executable and unit while retaining the database and key for a
+future reinstall:
+
+```bash
+./scripts/packaging/linux/uninstall-user.sh
+```
+
+Add `--purge-data` only when the database, key, certificates, and configuration
+should also be removed.
+
+The archive's native packaging helpers are checked by
+`scripts/packaging/validate.sh`. Linux CI runs both the isolated launcher test
+and a real lingering user-systemd job that verifies activation, HTTPS health,
+authenticated task create/update/read/delete, restart persistence, an
+install-only upgrade, and uninstall with data retention. The tagged release
+smoke job repeats that systemd lifecycle against the extracted release binary.
 
 #### Windows launcher and service
 
