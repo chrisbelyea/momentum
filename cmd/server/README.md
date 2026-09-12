@@ -47,6 +47,10 @@ warning — this is expected for auto-generated certificates).
 DB_PATH=/path/to/database.db PORT=8443 ./bin/momentum-server
 ```
 
+For an explicit filesystem `DB_PATH`, Momentum creates a missing parent
+directory with user-only permissions before opening SQLite. SQLite special
+targets such as `:memory:` and `file:` URIs are passed through unchanged.
+
 ### Using custom TLS certificates
 
 Set `TLS_CERT` and `TLS_KEY` to your certificate and key files to skip auto-generation:

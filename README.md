@@ -50,7 +50,8 @@ See [docs/tls-setup.md](docs/tls-setup.md) for dev (mkcert / openssl) and produc
 By default, Momentum stores its SQLite database in the current user's writable
 OS configuration directory: `~/.config/Momentum/momentum.db` on Linux and
 `%AppData%\\Momentum\\momentum.db` on Windows. Set `DB_PATH` to use a specific
-database location; an explicit value is used unchanged.
+database location; an explicit filesystem path creates its missing parent with
+user-only permissions, while SQLite special targets are passed through unchanged.
 
 ```bash
 export TLS_CERT=path/to/cert.pem
