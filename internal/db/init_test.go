@@ -19,7 +19,7 @@ func TestInitializeSchema_CreatesTablesOnEmptyDB(t *testing.T) {
 	}
 
 	// Verify all production tables exist, including authentication state.
-	tables := []string{"users", "backends", "tasks", "credentials", "sessions", "momentum_schema_migrations"}
+	tables := []string{"users", "backends", "tasks", "credentials", "sessions", "sync_operation_keys", "momentum_schema_migrations"}
 	for _, table := range tables {
 		var count int
 		err := database.QueryRow(
@@ -58,6 +58,32 @@ func TestInitializeSchema_IdempotentOnExistingSchema(t *testing.T) {
 	// Initialize again — should be a no-op and not return an error
 	if err := InitializeSchema(database); err != nil {
 		t.Fatalf("Second InitializeSchema call failed: %v", err)
+	}
+}
+
+func TestInitializeSchema_UpgradesCurrentSchemaWithOperationKeyLedger(t *testing.T) {
+	database, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	if err := InitializeSchema(database); err != nil {
+		t.Fatal(err)
+	}
+	// Model a database created by the previously shipped runtime: its base
+	// schema is current, but the new operation-key table has not been applied.
+	if _, err := database.Exec("DROP TABLE sync_operation_keys"); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitializeSchema(database); err != nil {
+		t.Fatalf("operation-key upgrade failed: %v", err)
+	}
+	var count int
+	if err := database.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='sync_operation_keys'").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("operation-key table was not restored: count=%d", count)
 	}
 }
 

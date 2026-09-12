@@ -142,6 +142,7 @@ func (s *Service) RunBackend(ctx context.Context, backendID int) (Result, error)
 	// restart can explain and account for partial work rather than presenting
 	// an unexplained checkpoint transition.
 	runner := s.runner
+	runner.Store = s.syncRepo
 	observerContext := context.WithoutCancel(ctx)
 	runner.Observer = func(event syncengine.SyncEvent) {
 		operation := db.SyncOperation{

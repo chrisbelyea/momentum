@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -90,6 +91,47 @@ type SyncConflict struct {
 type SyncRepository struct{ db *sql.DB }
 
 func NewSyncRepository(db *sql.DB) *SyncRepository { return &SyncRepository{db: db} }
+
+// Completed reports whether a provider operation was durably completed. The
+// operation key is intentionally the same stable identity used by the sync
+// runner, so a process restart can avoid repeating a provider mutation.
+func (r *SyncRepository) Completed(ctx context.Context, key string) (bool, error) {
+	backendID, err := backendIDFromOperationKey(key)
+	if err != nil {
+		return false, err
+	}
+	var completed int
+	err = r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sync_operation_keys WHERE operation_key=? AND backend_id=?)`, key, backendID).Scan(&completed)
+	if err != nil {
+		return false, fmt.Errorf("check completed sync operation %q: %w", key, err)
+	}
+	return completed == 1, nil
+}
+
+// MarkCompleted durably records a provider operation. INSERT OR IGNORE makes
+// retries and duplicate completion notifications harmless.
+func (r *SyncRepository) MarkCompleted(ctx context.Context, key string) error {
+	backendID, err := backendIDFromOperationKey(key)
+	if err != nil {
+		return err
+	}
+	if _, err := r.db.ExecContext(ctx, `INSERT OR IGNORE INTO sync_operation_keys(operation_key,backend_id) VALUES(?,?)`, key, backendID); err != nil {
+		return fmt.Errorf("mark sync operation %q complete: %w", key, err)
+	}
+	return nil
+}
+
+func backendIDFromOperationKey(key string) (int, error) {
+	parts := strings.SplitN(key, "/", 3)
+	if len(parts) < 2 || parts[0] != "backend" {
+		return 0, fmt.Errorf("sync operation key %q does not identify a backend", key)
+	}
+	backendID, err := strconv.Atoi(parts[1])
+	if err != nil || backendID <= 0 {
+		return 0, fmt.Errorf("sync operation key %q has an invalid backend ID", key)
+	}
+	return backendID, nil
+}
 
 // RecordOperation appends one provider attempt without advancing the
 // checkpoint. Runtime observers use this for durable attempt/outcome history;

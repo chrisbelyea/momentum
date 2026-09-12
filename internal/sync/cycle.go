@@ -2,6 +2,9 @@ package sync
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 
 	"github.com/chrisbelyea/momentum/internal/models"
@@ -83,9 +86,20 @@ func RunCycle(ctx context.Context, adapter Adapter, runner Runner, input CycleIn
 			}
 			entity := remoteEntityForAction(action, input.BackendID)
 			var push PushResult
-			operation := SyncOperation{BackendID: input.BackendID, Operation: "push", Key: operationKey(input.BackendID, "push", entity.RemoteUID, index), Run: func(ctx context.Context) error {
+			pushKey := pushOperationKey(input.BackendID, entity, index)
+			operation := SyncOperation{BackendID: input.BackendID, Operation: "push", Key: pushKey, Run: func(ctx context.Context) error {
 				var err error
 				push, err = adapter.Push(ctx, entity)
+				return err
+			}, Resume: func(ctx context.Context) error {
+				resumer, ok := adapter.(interface {
+					ResumePush(context.Context, RemoteEntity) (PushResult, error)
+				})
+				if !ok {
+					return fmt.Errorf("sync adapter cannot resume completed push operation %q", pushKey)
+				}
+				var err error
+				push, err = resumer.ResumePush(ctx, entity)
 				return err
 			}}
 			if err := runner.Run(ctx, operation); err != nil {
@@ -140,4 +154,13 @@ func remoteEntityForAction(action ReconcileAction, backendID int) RemoteEntity {
 
 func operationKey(backendID int, operation, uid string, index int) string {
 	return fmt.Sprintf("backend/%d/%s/%s/%d", backendID, operation, uid, index)
+}
+
+// pushOperationKey includes the complete canonical task revision. A key that
+// only contains UID/index would incorrectly suppress a later edit to the same
+// task after the first push completed.
+func pushOperationKey(backendID int, entity RemoteEntity, index int) string {
+	revision, _ := json.Marshal(entity.Task)
+	digest := sha256.Sum256(revision)
+	return operationKey(backendID, "push", entity.RemoteUID, index) + "/" + hex.EncodeToString(digest[:])
 }

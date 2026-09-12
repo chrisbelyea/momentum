@@ -366,10 +366,24 @@ func (c *Client) CreateTodo(ctx context.Context, collectionHref string, todo *vt
 	if err != nil {
 		return nil, err
 	}
-	u, _ := url.Parse(collection)
-	resource := strings.TrimRight(u.Path, "/") + "/" + url.PathEscape(todo.UID) + ".ics"
-	u.Path = resource
-	return c.putTodo(ctx, u.String(), body, "*")
+	u, err := c.todoHref(collection, todo.UID)
+	if err != nil {
+		return nil, err
+	}
+	return c.putTodo(ctx, u, body, "*")
+}
+
+func (c *Client) todoHref(collectionHref, uid string) (string, error) {
+	collection, err := c.resolveRemote(collectionHref)
+	if err != nil {
+		return "", err
+	}
+	u, err := url.Parse(collection)
+	if err != nil {
+		return "", err
+	}
+	u.Path = strings.TrimRight(u.Path, "/") + "/" + url.PathEscape(uid) + ".ics"
+	return c.resolveRemote(u.String())
 }
 
 // UpdateTodo replaces a resource. etag is sent as If-Match when non-empty.

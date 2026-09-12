@@ -282,7 +282,7 @@ go test ./internal/db -v
 
 - OAuth 2.0 support for CalDAV servers that support it
 - OS keychain integration for client-side credential storage (see [credential-storage.md](credential-storage.md))
-- Scheduled background synchronization (the current release exposes the tested cycle API and provider checkpoints to a future scheduler)
+- Scheduled background synchronization by setting `MOMENTUM_SYNC_INTERVAL` to a positive Go duration (for example `15m`); it is disabled by default
 - Hosted-service certification beyond the pinned provider-compatible Nextcloud CI service
 - Automatic credential rotation
 - Multi-factor authentication support
