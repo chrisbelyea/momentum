@@ -195,7 +195,7 @@ try {
   ]);
   await page.goto(`${baseURL}/list?backend_id=${backendID}`);
   assert.doesNotMatch(await page.locator('body').textContent(), /Concurrent device wins/);
-  console.log('Momentum browser E2E passed: authenticated board/list create, rich edit, conflict, failure reconciliation, delete');
+  console.log('Momentum browser E2E passed: authenticated board/list create, backend filter state, rich edit, conflict, failure reconciliation, delete');
   passed = true;
 } finally {
   if (browser) await browser.close();
