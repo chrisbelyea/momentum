@@ -18,4 +18,6 @@ grep -q "Join-Path \$env:ProgramData 'Momentum'" "${ROOT}/scripts/packaging/wind
 grep -q 'icacls.exe' "${ROOT}/scripts/packaging/windows/Install-Momentum.ps1"
 test -f "${ROOT}/scripts/packaging/windows/Test-Launcher.ps1"
 test -f "${ROOT}/scripts/packaging/windows/Test-TaskWorkflow.ps1"
+grep -q 'supportsSkipCertificateCheck' "${ROOT}/scripts/packaging/windows/Test-TaskWorkflow.ps1"
+grep -q 'ServerCertificateValidationCallback' "${ROOT}/scripts/packaging/windows/Test-TaskWorkflow.ps1"
 echo 'Native packaging files validated.'

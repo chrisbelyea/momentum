@@ -5,6 +5,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$supportsSkipCertificateCheck = (Get-Command Invoke-WebRequest).Parameters.ContainsKey('SkipCertificateCheck')
+if (-not $supportsSkipCertificateCheck) {
+    # Windows PowerShell 5.1 (the inbox powershell.exe used by Test-Launcher)
+    # does not expose -SkipCertificateCheck. The packaged server uses a
+    # self-signed development certificate, so bypass validation only for this
+    # short-lived test process.
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+}
 
 function Invoke-JsonRequest {
     param(
@@ -25,6 +33,9 @@ function Invoke-JsonRequest {
     if ($null -ne $Body) {
         $request.ContentType = 'application/json'
         $request.Body = ($Body | ConvertTo-Json -Compress)
+    }
+    if ($supportsSkipCertificateCheck) {
+        $request.SkipCertificateCheck = $true
     }
     $response = Invoke-WebRequest @request
     if ($response.StatusCode -ne $ExpectedStatus) {
@@ -72,9 +83,11 @@ $logoutRequest = @{
     Uri = "$BaseUrl/auth/logout"
     Method = 'POST'
     WebSession = $session
-    SkipCertificateCheck = $true
     UseBasicParsing = $true
     ErrorAction = 'Stop'
+}
+if ($supportsSkipCertificateCheck) {
+    $logoutRequest.SkipCertificateCheck = $true
 }
 $logout = Invoke-WebRequest @logoutRequest
 if ($logout.StatusCode -ne 204) { throw "POST /auth/logout returned HTTP $($logout.StatusCode), expected 204" }
