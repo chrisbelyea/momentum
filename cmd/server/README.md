@@ -33,7 +33,7 @@ After building, simply run:
 
 The server initializes or upgrades the SQLite database automatically and auto-generates
 a self-signed TLS certificate on first run when `TLS_CERT` and `TLS_KEY` are omitted.
-It reuses that certificate on subsequent runs. Open `https://localhost:8443` in your
+It reuses that certificate on subsequent runs. Open `https://127.0.0.1:8443` in your
 browser (accept the security warning — this is expected for a development certificate).
 The root page requires an authenticated session. Register the first account with the
 JSON endpoint or use an existing client; browser-native onboarding is tracked in
@@ -44,7 +44,7 @@ JSON endpoint or use an existing client; browser-native onboarding is tracked in
 1. Start the server (it initializes or upgrades the canonical SQLite schema automatically):
 
 ```bash
-# Default: uses the OS user data directory, listens on https://localhost:8443
+# Default: uses the OS user data directory, listens on https://127.0.0.1:8443
 ./bin/momentum-server
 
 # Custom configuration via environment variables
@@ -189,10 +189,10 @@ Valid task status values (from VTODO specification):
 
 ```bash
 # Authenticate first and send the returned session cookie with protected routes.
-# The examples below use integer backend/task IDs and https://localhost:8443.
+# The examples below use integer backend/task IDs and https://127.0.0.1:8443.
 
 # Create a task
-curl -k -X POST https://localhost:8443/caldav/tasks \
+curl -k -X POST https://127.0.0.1:8443/caldav/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "backend_id": 1,
@@ -202,13 +202,13 @@ curl -k -X POST https://localhost:8443/caldav/tasks \
   }'
 
 # List tasks
-curl -k "https://localhost:8443/caldav/tasks?backend_id=1"
+curl -k "https://127.0.0.1:8443/caldav/tasks?backend_id=1"
 
 # Get a task
-curl -k https://localhost:8443/caldav/tasks/{task-id}
+curl -k https://127.0.0.1:8443/caldav/tasks/{task-id}
 
 # Update a task
-curl -k -X PUT https://localhost:8443/caldav/tasks/{task-id} \
+curl -k -X PUT https://127.0.0.1:8443/caldav/tasks/{task-id} \
   -H "Content-Type: application/json" \
   -d '{
     "backend_id": 1,
@@ -218,7 +218,7 @@ curl -k -X PUT https://localhost:8443/caldav/tasks/{task-id} \
   }'
 
 # Delete a task
-curl -k -X DELETE https://localhost:8443/caldav/tasks/{task-id}
+curl -k -X DELETE https://127.0.0.1:8443/caldav/tasks/{task-id}
 ```
 
 ## Architecture

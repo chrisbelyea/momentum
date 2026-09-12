@@ -63,7 +63,7 @@ export TLS_KEY=path/to/key.pem
 
 The release binary starts with a local task backend, but the web pages require an
 authenticated session. Register the first account through `/auth/register` (or use
-an existing API client), then open `https://localhost:8443`. Browser-native onboarding
+an existing API client), then open `https://127.0.0.1:8443`. Browser-native onboarding
 is tracked in [#145](https://github.com/chrisbelyea/momentum/issues/145).
 
 ## CI/CD and Tooling (Overview)

@@ -34,6 +34,26 @@ grep -q 'BASE_URL="https://127.0.0.1:${PORT}"' "${ROOT}/scripts/release/integrat
 grep -q 'https://127.0.0.1:8443/health' "${ROOT}/.github/workflows/ci.yml"
 grep -q 'https://127.0.0.1:8443/health' "${ROOT}/.github/workflows/release.yml"
 
+# Keep local quick-start examples on the explicit IPv4 loopback address too.
+# A localhost URL can resolve to ::1 first while the packaged default listener
+# intentionally binds only 127.0.0.1, making a healthy installation appear
+# unavailable on some Windows and Linux hosts.
+local_docs=(
+  "${ROOT}/README.md"
+  "${ROOT}/cmd/server/README.md"
+  "${ROOT}/docs/caldav-connection-config.md"
+  "${ROOT}/docs/operations.md"
+  "${ROOT}/docs/tls-setup.md"
+  "${ROOT}/web/README.md"
+)
+for file in "${local_docs[@]}"; do
+  grep -q 'https://127.0.0.1:8443' "${file}"
+  if grep -q 'https://localhost:8443' "${file}"; then
+    echo "stale localhost quick-start URL found in ${file}" >&2
+    exit 1
+  fi
+done
+
 # These are contributor-facing rules. A positive Liquibase workflow here would
 # direct future changes to a schema source that is not used by the release
 # binary; a prohibition that names the retired system is valid documentation.

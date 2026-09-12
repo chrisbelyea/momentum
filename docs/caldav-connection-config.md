@@ -228,7 +228,7 @@ returned in API responses.
 
 1. Create a backend:
 ```bash
-curl -k -X POST https://localhost:8443/backends \
+curl -k -X POST https://127.0.0.1:8443/backends \
   -H "Content-Type: application/json" \
   -d '{
     "backend_type": "external_caldav",
@@ -243,12 +243,12 @@ curl -k -X POST https://localhost:8443/backends \
 
 2. List backends:
 ```bash
-curl -k https://localhost:8443/backends
+curl -k https://127.0.0.1:8443/backends
 ```
 
 3. Validate connection:
 ```bash
-curl -k -X POST https://localhost:8443/backends/validate \
+curl -k -X POST https://127.0.0.1:8443/backends/validate \
   -H "Content-Type: application/json" \
   -d '{
     "backend_type": "external_caldav",

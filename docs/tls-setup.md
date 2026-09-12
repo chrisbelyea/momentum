@@ -72,7 +72,7 @@ The new certificate will be generated on the next server start.
 ### Browser trust
 
 Auto-generated certificates are **not trusted by browsers**. You will see a security
-warning the first time you open `https://localhost:8443`. This is expected for
+warning the first time you open `https://127.0.0.1:8443`. This is expected for
 development use. Click through the warning (or add a browser exception) to proceed.
 
 For a trusted development certificate that avoids browser warnings, use
@@ -110,7 +110,7 @@ export PORT=8443
 ./bin/momentum-server
 ```
 
-Then open `https://localhost:8443` in your browser.
+Then open `https://127.0.0.1:8443` in your browser.
 
 ### Option B: openssl self-signed certificate
 

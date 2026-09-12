@@ -78,10 +78,10 @@ login are JSON endpoints. The following creates the first account and stores its
 session cookie in `cookies.txt`:
 
 ```bash
-curl -k -c cookies.txt -X POST https://localhost:8443/auth/register \
+curl -k -c cookies.txt -X POST https://127.0.0.1:8443/auth/register \
   -H 'Content-Type: application/json' \
   -d '{"email":"you@example.com","password":"use-a-password-at-least-12-characters"}'
-curl -k -b cookies.txt https://localhost:8443/
+curl -k -b cookies.txt https://127.0.0.1:8443/
 ```
 
 Open the same URL in a browser after importing or accepting the development
