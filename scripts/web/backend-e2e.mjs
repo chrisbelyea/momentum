@@ -98,18 +98,18 @@ try {
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   const page = await context.newPage();
 
-  // Registration is the only setup request; every backend and task action
-  // below is performed through the rendered browser controls.
-  await page.goto(`${baseURL}/health`);
-  const registration = await page.evaluate(async ({ email: address, password: secret }) => {
-    const response = await fetch('/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: address, password: secret }),
-    });
-    return { status: response.status, body: await response.text() };
-  }, { email, password });
-  assert.equal(registration.status, 201, registration.body);
+  // A clean browser profile must onboard through the rendered first-run page;
+  // every backend and task action below is performed through browser controls.
+  await page.goto(`${baseURL}/`);
+  assert.match(page.url(), /\/login\?/);
+  await page.getByRole('link', { name: 'Create your account' }).click();
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+    page.getByRole('button', { name: 'Create account' }).click(),
+  ]);
+  assert.equal(new URL(page.url()).pathname, '/');
 
   await page.goto(`${baseURL}/settings/backends`);
   await page.getByRole('heading', { name: 'Configured backends' }).waitFor();
