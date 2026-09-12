@@ -103,6 +103,13 @@ func runServer(stop <-chan os.Signal) {
 	taskRepo := db.NewTaskRepository(database)
 	backendRepo := db.NewBackendRepository(database)
 	authService := auth.NewService(database)
+	// Remove expired sessions during startup so long-lived installations do not
+	// retain stale authentication rows forever. Failure to clean old rows should
+	// not prevent the server from starting because expired rows are rejected by
+	// UserID regardless.
+	if err := authService.CleanupExpired(); err != nil {
+		log.Printf("Warning: failed to clean up expired sessions: %v", err)
+	}
 	authPageHandler := web.NewAuthPageHandler(authService)
 
 	// Initialize handlers
