@@ -63,6 +63,8 @@ fi
 
 umask 077
 mkdir -p "${INSTALL_DIR}" "${DATA_DIR}" "${SERVICE_DIR}"
+key_parent="$(dirname -- "${KEY_FILE}")"
+mkdir -p "${key_parent}"
 install -m 0755 "${BINARY}" "${TARGET}"
 
 if [[ -z "${MOMENTUM_ENCRYPTION_KEY:-}" ]]; then
