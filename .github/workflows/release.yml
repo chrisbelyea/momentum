@@ -146,7 +146,7 @@ jobs:
           (cd "$RUNNER_TEMP" && "$BINARY") >"$LOG_FILE" 2>&1 & SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true; cat "$LOG_FILE"' EXIT
           for _ in $(seq 1 20); do
-            if curl -k -fsS https://localhost:8443/health >/dev/null; then exit 0; fi
+            if curl -k -fsS https://127.0.0.1:8443/health >/dev/null; then exit 0; fi
             sleep 1
           done
           echo 'health endpoint did not become ready'; exit 1

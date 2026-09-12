@@ -21,7 +21,10 @@ BINARY="${1:?Usage: $(basename "$0") <path-to-momentum-server-binary>}"
 BINARY_ABS="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 BINARY_DIR="$(cd "$(dirname "$1")" && pwd)"
 PORT="${PORT:-18443}"
-BASE_URL="https://localhost:${PORT}"
+# Match the packaged server's IPv4 loopback default explicitly. On hosts
+# where localhost resolves to ::1 first, probing localhost can fail before
+# falling back to the IPv4 listener.
+BASE_URL="https://127.0.0.1:${PORT}"
 SERVER_READY_TIMEOUT=15   # seconds to wait for the server health check
 SERVER_SHUTDOWN_WAIT=5    # seconds to wait for graceful shutdown before SIGKILL
 
