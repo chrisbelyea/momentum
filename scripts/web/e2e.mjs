@@ -109,7 +109,7 @@ try {
   assert.match(await page.locator('body').textContent(), /Filter state task/);
 
   // Create a rich task via accessible controls and verify the board reload.
-  await page.goto(`${baseURL}/?backend_id=2`);
+  await page.goto(`${baseURL}/?backend_id=${backendID}`);
   await page.locator('#task-title').fill('Browser workflow task');
   await page.locator('#task-description').fill('Created through the real board');
   await page.locator('#task-due').fill('2026-12-31');
