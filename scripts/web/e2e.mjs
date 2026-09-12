@@ -12,7 +12,9 @@ import { chromium } from 'playwright';
 const execFile = promisify(execFileCallback);
 const binary = process.env.MOMENTUM_E2E_BINARY || join(process.cwd(), 'bin', 'momentum-server');
 const port = Number(process.env.MOMENTUM_E2E_PORT || 18444);
-const baseURL = `https://localhost:${port}`;
+// The packaged server binds IPv4 loopback by default. Avoid localhost's
+// IPv6-first resolution on hosts where ::1 is tried before 127.0.0.1.
+const baseURL = `https://127.0.0.1:${port}`;
 const password = 'browser-e2e-password';
 const email = `browser-e2e-${Date.now()}@example.invalid`;
 const dataDir = await mkdtemp(join(tmpdir(), 'momentum-browser-e2e-'));
