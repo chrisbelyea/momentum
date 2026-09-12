@@ -18,6 +18,7 @@ import (
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrUnauthenticated    = errors.New("authentication required")
+	ErrRegistrationClosed = errors.New("registration is closed")
 )
 
 const (
@@ -38,21 +39,82 @@ func (s *Service) CreateUser(email, password string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	result, err := s.db.Exec("INSERT INTO users(email) VALUES(?)", strings.ToLower(strings.TrimSpace(email)))
-	if err != nil {
-		return 0, fmt.Errorf("create user: %w", err)
-	}
-	id, err := result.LastInsertId()
+	tx, err := s.db.Begin()
 	if err != nil {
 		return 0, err
 	}
-	if _, err = s.db.Exec("INSERT INTO credentials(user_id,type,secret_hash) VALUES(?,?,?)", id, credentialType, hash); err != nil {
+	defer func() { _ = tx.Rollback() }()
+	var credentialCount int
+	if err := tx.QueryRow("SELECT COUNT(*) FROM credentials WHERE type=?", credentialType).Scan(&credentialCount); err != nil {
+		return 0, err
+	}
+	if credentialCount > 0 {
+		return 0, ErrRegistrationClosed
+	}
+	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
+	var uncredentialedUsers int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM users u WHERE NOT EXISTS (
+		SELECT 1 FROM credentials c WHERE c.user_id=u.id AND c.type=?
+	)`, credentialType).Scan(&uncredentialedUsers); err != nil {
+		return 0, err
+	}
+	var id int64
+	switch uncredentialedUsers {
+	case 0:
+		result, insertErr := tx.Exec("INSERT INTO users(email) VALUES(?)", normalizedEmail)
+		if insertErr != nil {
+			return 0, fmt.Errorf("create user: %w", insertErr)
+		}
+		id, err = result.LastInsertId()
+		if err != nil {
+			return 0, err
+		}
+	case 1:
+		// The canonical schema and pre-authentication releases may already
+		// contain one password-less compatibility user with local tasks. Adopt
+		// that identity instead of stranding its backend and task rows.
+		if err := tx.QueryRow(`SELECT u.id FROM users u WHERE NOT EXISTS (
+			SELECT 1 FROM credentials c WHERE c.user_id=u.id AND c.type=?
+		) ORDER BY u.id LIMIT 1`, credentialType).Scan(&id); err != nil {
+			return 0, err
+		}
+		if _, err := tx.Exec("UPDATE users SET email=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", normalizedEmail, id); err != nil {
+			return 0, fmt.Errorf("adopt existing user: %w", err)
+		}
+	default:
+		// Multiple password-less identities cannot be safely assigned to the
+		// first account without an operator choice; fail closed rather than
+		// exposing another user's legacy tasks.
+		return 0, ErrRegistrationClosed
+	}
+	if _, err = tx.Exec("INSERT INTO credentials(user_id,type,secret_hash) VALUES(?,?,?)", id, credentialType, hash); err != nil {
 		return 0, fmt.Errorf("create credential: %w", err)
 	}
-	if _, err = s.db.Exec("INSERT INTO backends(user_id,backend_type,name) VALUES(?,?,?)", id, "internal", "Local tasks"); err != nil {
-		return 0, fmt.Errorf("create default backend: %w", err)
+	var backendCount int
+	if err := tx.QueryRow("SELECT COUNT(*) FROM backends WHERE user_id=?", id).Scan(&backendCount); err != nil {
+		return 0, err
+	}
+	if backendCount == 0 {
+		if _, err = tx.Exec("INSERT INTO backends(user_id,backend_type,name) VALUES(?,?,?)", id, "internal", "Local tasks"); err != nil {
+			return 0, fmt.Errorf("create default backend: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
 	}
 	return int(id), nil
+}
+
+// RegistrationAvailable reports whether this self-hosted instance still needs
+// its first password-backed account. Momentum's Phase 1 identity policy allows
+// one initial account; additional account/invitation administration is a later
+// feature rather than silently exposing open registration.
+func (s *Service) RegistrationAvailable() bool {
+	var count int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM credentials WHERE type=?", credentialType).Scan(&count); err != nil {
+		return false
+	}
+	return count == 0
 }
 
 func (s *Service) Authenticate(email, password string) (int, error) {

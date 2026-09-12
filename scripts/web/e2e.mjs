@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFile as execFileCallback, spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { openSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:https';
+import { promisify } from 'node:util';
 import { chromium } from 'playwright';
 
+const execFile = promisify(execFileCallback);
 const binary = process.env.MOMENTUM_E2E_BINARY || join(process.cwd(), 'bin', 'momentum-server');
 const port = Number(process.env.MOMENTUM_E2E_PORT || 18444);
 // The packaged server binds IPv4 loopback by default. Avoid localhost's
@@ -55,22 +57,23 @@ try {
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   const page = await context.newPage();
 
-  // Authenticate through the real server, then drive the rendered board.
-  await page.goto(`${baseURL}/health`);
-  const registration = await page.evaluate(async ({ email: address, password: secret }) => {
-    const response = await fetch('/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: address, password: secret }),
-    });
-    return { status: response.status, body: await response.text() };
-  }, { email, password });
-  assert.equal(registration.status, 201, registration.body);
+  // A clean browser profile must be able to onboard without direct API auth
+  // injection. The root navigation redirects to the first-run account page.
+  await page.goto(`${baseURL}/`);
+  assert.match(page.url(), /\/login\?/);
+  await page.getByRole('link', { name: 'Create your account' }).click();
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+    page.getByRole('button', { name: 'Create account' }).click(),
+  ]);
+  assert.equal(new URL(page.url()).pathname, '/');
 
   await page.goto(`${baseURL}/`);
   assert.equal(await page.title(), 'Momentum - Kanban Board');
   const backendID = await page.locator('#task-backend').inputValue();
-  assert.ok(backendID, 'registration should select the local backend');
+  assert.ok(backendID, 'registration should select the adopted local backend');
   assert.equal(await page.locator('.task-card').count(), 0);
 
   // Create a rich task via accessible controls and verify the board reload.
@@ -153,13 +156,53 @@ try {
   assert.equal(await reconciledCard.getAttribute('data-status'), 'IN-PROCESS');
 
   // Delete through the visible board control and verify it is gone in list.
+  // The delete form performs a document navigation. Wait for the navigation
+  // it triggers before starting the list navigation, otherwise Chromium can
+  // abort the second goto while the first response is still being committed.
   await Promise.all([
     page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
     reconciledCard.getByRole('button', { name: 'Delete' }).click(),
   ]);
   await page.goto(`${baseURL}/list?backend_id=${backendID}`);
   assert.doesNotMatch(await page.locator('body').textContent(), /Concurrent device wins/);
-  console.log('Momentum browser E2E passed: authenticated board/list create, rich edit, conflict, failure reconciliation, delete');
+
+  // Logout revokes the browser session, and an invalid subsequent login is
+  // rejected before a valid sign-in restores access.
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await page.waitForURL(/\/login$/);
+  await page.goto(`${baseURL}/`);
+  assert.match(page.url(), /\/login\?/);
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill('wrong password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('alert').waitFor();
+  assert.match(await page.getByRole('alert').textContent(), /Invalid email or password/);
+  // The failed POST re-renders a fresh form, so the browser must refill both
+  // fields before retrying rather than relying on the discarded form values.
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await Promise.all([
+    page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+    page.getByRole('button', { name: 'Sign in' }).click(),
+  ]);
+  assert.equal(new URL(page.url()).pathname, '/');
+
+  // Expire the active session in the test database and verify that browser
+  // navigation treats it like a revoked session. Python's stdlib sqlite3 is
+  // available on the Ubuntu browser runner and avoids adding a production
+  // database dependency just for this assertion.
+  await execFile('python3', ['-c', `
+import sqlite3
+import sys
+connection = sqlite3.connect(sys.argv[1])
+connection.execute("UPDATE sessions SET expires_at = CURRENT_TIMESTAMP")
+connection.commit()
+connection.close()
+`, dbPath]);
+  await page.goto(`${baseURL}/`);
+  assert.match(page.url(), /\/login\?/);
+
+  console.log('Momentum browser E2E passed: first-run onboarding, login failure/logout, expired-session route protection, authenticated board/list create, rich edit, conflict, failure reconciliation, delete');
   passed = true;
 } finally {
   if (browser) await browser.close();

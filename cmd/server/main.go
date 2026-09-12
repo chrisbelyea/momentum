@@ -103,6 +103,14 @@ func runServer(stop <-chan os.Signal) {
 	taskRepo := db.NewTaskRepository(database)
 	backendRepo := db.NewBackendRepository(database)
 	authService := auth.NewService(database)
+	// Remove expired sessions during startup so long-lived installations do not
+	// retain stale authentication rows forever. Failure to clean old rows should
+	// not prevent the server from starting because expired rows are rejected by
+	// UserID regardless.
+	if err := authService.CleanupExpired(); err != nil {
+		log.Printf("Warning: failed to clean up expired sessions: %v", err)
+	}
+	authPageHandler := web.NewAuthPageHandler(authService)
 
 	// Initialize handlers
 	caldavHandler := caldav.NewHandler(taskRepo)
@@ -115,6 +123,9 @@ func runServer(stop <-chan os.Signal) {
 	// Setup routes
 	mux := http.NewServeMux()
 	mux.Handle("/auth/", authService.Routes())
+	mux.HandleFunc("/login", authPageHandler.HandleLogin)
+	mux.HandleFunc("/register", authPageHandler.HandleRegister)
+	mux.HandleFunc("/logout", authPageHandler.HandleLogout)
 
 	// Static file serving (PWA assets: manifest.json, icons, service worker).
 	// Directory listings are disabled; individual files are cached for one year.
@@ -152,9 +163,9 @@ func runServer(stop <-chan os.Signal) {
 	})
 
 	// Web UI routes
-	mux.Handle("/", authService.Require(http.HandlerFunc(webHandler.HandleIndex)))
-	mux.Handle("/list", authService.Require(http.HandlerFunc(webHandler.HandleList)))
-	mux.Handle("/settings/backends", authService.Require(http.HandlerFunc(webHandler.HandleBackendsPage)))
+	mux.Handle("/", authService.RequirePage(http.HandlerFunc(webHandler.HandleIndex)))
+	mux.Handle("/list", authService.RequirePage(http.HandlerFunc(webHandler.HandleList)))
+	mux.Handle("/settings/backends", authService.RequirePage(http.HandlerFunc(webHandler.HandleBackendsPage)))
 	mux.Handle("/api/tasks", authService.Require(http.HandlerFunc(webHandler.HandleTasks)))
 	mux.Handle("/api/tasks/", authService.Require(http.HandlerFunc(webHandler.HandleTasks)))
 	mux.Handle("/api/sync/conflicts", authService.Require(http.HandlerFunc(webHandler.HandleSyncConflicts)))

@@ -60,6 +60,10 @@ export TLS_KEY=/path/to/key.pem
 See [docs/tls-setup.md](../../docs/tls-setup.md) for development and production
 certificate setup instructions.
 
+See the [first-run onboarding guide](../../docs/onboarding.md) and the
+[authentication API contract](../../docs/auth-api.md) for account setup,
+session-cookie behavior, and authentication error responses.
+
 ## Configuration
 
 The server is configured via environment variables:

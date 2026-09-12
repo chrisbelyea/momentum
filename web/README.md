@@ -15,7 +15,7 @@ This directory contains the web-based kanban board UI for Momentum.
 
 ## Current scope
 
-The server requires an authenticated session for the board, list, and task API. Each task mutation may include an `If-Match` version from the rendered task card. If another device changes the task first, the server returns `409 Conflict`; the browser announces the conflict and reloads the authoritative board instead of silently overwriting the newer change. Failed optimistic status moves are likewise reloaded from the server.
+The server requires an authenticated session for the board, list, and task API. A fresh browser navigation redirects to the first-run account page; see [the onboarding guide](../docs/onboarding.md) and [authentication API contract](../docs/auth-api.md). Each task mutation may include an `If-Match` version from the rendered task card. If another device changes the task first, the server returns `409 Conflict`; the browser announces the conflict and reloads the authoritative board instead of silently overwriting the newer change. Failed optimistic status moves are likewise reloaded from the server.
 
 The authenticated board/list workflow is implemented. Remaining limitations and
 future improvements are:

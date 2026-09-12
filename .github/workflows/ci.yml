@@ -17,6 +17,14 @@ jobs:
       - name: Verify embedded schema is generated from canonical changelog
         run: scripts/db/generate-init-sql.sh --check
 
+  auth-docs:
+    name: Authentication API documentation contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate authentication routes and documentation
+        run: scripts/release/validate-auth-docs.sh
+
   test:
     runs-on: ubuntu-latest
     steps:
