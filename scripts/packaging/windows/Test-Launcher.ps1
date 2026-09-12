@@ -9,7 +9,9 @@ $ErrorActionPreference = 'Stop'
 if (-not (Test-Path -LiteralPath $BinaryPath -PathType Leaf)) { throw "Binary not found: $BinaryPath" }
 if (-not (Test-Path -LiteralPath $LauncherPath -PathType Leaf)) { throw "Launcher not found: $LauncherPath" }
 
-$dataDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ("momentum-packaging-" + [Guid]::NewGuid().ToString('N'))
+# Deliberately include a space so the child PowerShell invocation exercises
+# the path quoting contract instead of passing only conventional temp paths.
+$dataDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ("momentum packaging-" + [Guid]::NewGuid().ToString('N'))
 $stdoutPath = Join-Path $dataDirectory 'server.stdout.log'
 $stderrPath = Join-Path $dataDirectory 'server.stderr.log'
 New-Item -ItemType Directory -Force -Path $dataDirectory | Out-Null
