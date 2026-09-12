@@ -129,7 +129,7 @@ Required before any public or self-hosted release.
 
 1. **Provider certification and sync operations** — `pkg/vtodo`, the CalDAV adapter, transactional local action application, conflict/recovery API, per-backend reliability controls, Radicale standards-server coverage, provider-compatible Nextcloud coverage, and live cursor/restart evidence are implemented. Hosted-service certification remains out of scope.
 2. **Backend abstraction layer** — The provider-neutral `internal/sync.Adapter` interface and capability model now separate canonical tasks from CalDAV transport. A broader application-level backend CRUD interface remains future architecture work and is not required for the current release.
-3. **Sync orchestration** — Provider-neutral `Runner`/`RunCycle` orchestration, transactional application, provider-native cursor integration, authenticated manual triggering, and an optional `MOMENTUM_SYNC_INTERVAL` scheduler now exist. The current release exercises synchronization through release-binary and live-provider workflow tests.
+3. **Sync orchestration** — Provider-neutral `Runner`/`RunCycle` orchestration, transactional application, provider-native cursor integration, authenticated manual triggering, and an optional `MOMENTUM_SYNC_INTERVAL` scheduler now exist. The runtime-sync implementation is exercised through release-binary and live-provider workflow tests; the published v0.2.2 release predates this integration.
 
 ---
 
