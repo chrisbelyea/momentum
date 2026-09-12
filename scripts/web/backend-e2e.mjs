@@ -13,7 +13,8 @@ import { chromium } from 'playwright';
 const execFile = promisify(execFileCallback);
 const binary = process.env.MOMENTUM_E2E_BINARY || join(process.cwd(), 'bin', 'momentum-server');
 const port = Number(process.env.MOMENTUM_BACKEND_E2E_PORT || 18445);
-const baseURL = `https://localhost:${port}`;
+// Keep the backend workflow on the server's explicit IPv4 loopback listener.
+const baseURL = `https://127.0.0.1:${port}`;
 const password = 'browser-backend-e2e-password';
 const email = `browser-backend-e2e-${Date.now()}@example.invalid`;
 const caldavUsername = 'caldav-browser';
