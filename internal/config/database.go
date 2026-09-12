@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -22,6 +23,9 @@ const (
 // user-only permissions before the path is returned.
 func DatabasePath() (string, error) {
 	if path := os.Getenv(databaseEnvVar); path != "" {
+		if err := ensureExplicitDatabaseParent(path); err != nil {
+			return "", err
+		}
 		return path, nil
 	}
 
@@ -34,4 +38,21 @@ func DatabasePath() (string, error) {
 		return "", fmt.Errorf("create application configuration directory %q: %w", appDir, err)
 	}
 	return filepath.Join(appDir, databaseName), nil
+}
+
+// ensureExplicitDatabaseParent makes a custom filesystem database path usable
+// on first run. SQLite special targets and URI-style paths are intentionally
+// left untouched because they are not ordinary filesystem paths.
+func ensureExplicitDatabaseParent(path string) error {
+	if path == ":memory:" || strings.HasPrefix(path, "file:") {
+		return nil
+	}
+	parent := filepath.Dir(path)
+	if parent == "." {
+		return nil
+	}
+	if err := os.MkdirAll(parent, 0700); err != nil {
+		return fmt.Errorf("create database parent directory %q: %w", parent, err)
+	}
+	return nil
 }

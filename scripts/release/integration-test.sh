@@ -27,7 +27,9 @@ SERVER_SHUTDOWN_WAIT=5    # seconds to wait for graceful shutdown before SIGKILL
 
 # Create a temp directory for the database and server logs.
 TEMP_DIR="$(mktemp -d)"
-DB_PATH="${TEMP_DIR}/integration-test.db"
+# Keep the database one level below the temporary root so the release binary
+# must create an explicit DB_PATH parent during first-run initialization.
+DB_PATH="${TEMP_DIR}/data/integration-test.db"
 LOG_FILE="${TEMP_DIR}/server.log"
 COOKIE_JAR="${TEMP_DIR}/cookies.txt"
 
