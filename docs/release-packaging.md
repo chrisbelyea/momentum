@@ -294,6 +294,11 @@ supported release installation path. Use the archive's native per-user helpers;
 the Windows service helper remains tracked by [#142](https://github.com/chrisbelyea/momentum/issues/142)
 and the Linux service lifecycle by [#151](https://github.com/chrisbelyea/momentum/issues/151).
 
+Packaged launches bind HTTPS to loopback (`127.0.0.1`) by default. Set
+`LISTEN_ADDR` explicitly for a network-facing deployment only after installing
+a certificate valid for that host and applying firewall or reverse-proxy access
+controls.
+
 ---
 
 ## PWA Web Assets

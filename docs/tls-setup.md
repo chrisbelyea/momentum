@@ -17,6 +17,7 @@ install and data-protection procedure.
 | `TLS_CERT`           | No       | auto-generated     | Path to the TLS certificate file (PEM format). If not set, a self-signed development certificate is auto-generated. |
 | `TLS_KEY`            | No       | auto-generated     | Path to the TLS private key file (PEM format). If not set, a self-signed development key is auto-generated. |
 | `PORT`               | No       | `8443`             | HTTPS listen port |
+| `LISTEN_ADDR`        | No       | `127.0.0.1`        | HTTPS bind host. The loopback default keeps auto-generated certificates local; set a non-loopback address only with a trusted certificate and network controls. |
 | `EXTERNAL_HOST`      | No       | `localhost:<PORT>` | Public hostname (and optional port) used to build HTTP→HTTPS redirect URLs. Set this to your domain in production (e.g., `example.com` or `example.com:8443`) |
 | `HTTP_REDIRECT_PORT` | No       | —                  | If set, an HTTP server on this port redirects all requests to HTTPS |
 | `MOMENTUM_DEV_CERT_DIR` | No | user certificate directory | Directory for the generated development certificate and private key |
