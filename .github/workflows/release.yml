@@ -60,7 +60,8 @@ jobs:
           mkdir -p "${staging}/scripts"
           cp dist/server/momentum-server "${staging}/"
           cp -R scripts/packaging "${staging}/scripts/"
-          cp LICENSE docs/release-packaging.md "${staging}/"
+          cp LICENSE docs/release-packaging.md docs/operations.md \
+            docs/tls-setup.md docs/database-schema.md "${staging}/"
           tar -czf "${archive}" -C "${staging}" .
           shasum -a 256 "${archive}" > "${archive}.sha256"
           mkdir -p macos-assets
@@ -145,7 +146,7 @@ jobs:
           (cd "$RUNNER_TEMP" && "$BINARY") >"$LOG_FILE" 2>&1 & SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true; cat "$LOG_FILE"' EXIT
           for _ in $(seq 1 20); do
-            if curl -k -fsS https://localhost:8443/health >/dev/null; then exit 0; fi
+            if curl -k -fsS https://127.0.0.1:8443/health >/dev/null; then exit 0; fi
             sleep 1
           done
           echo 'health endpoint did not become ready'; exit 1
@@ -186,7 +187,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: Expand-Archive -Path "${{ matrix.artifact }}" -DestinationPath . -Force
-      - run: chmod +x scripts/release/integration-test.sh
+      - name: Prepare integration script
+        shell: bash
+        run: chmod +x scripts/release/integration-test.sh
       - name: Run complete fresh-database workflow
         shell: bash
         run: scripts/release/integration-test.sh "$(find . -type f -name '${{ matrix.binary }}' -print -quit)"

@@ -2,6 +2,12 @@
 
 This document outlines the design and architecture of Momentum.
 
+> This is a target architecture and design reference, not a shipped-feature
+> checklist. The supported v0.2.2 behavior and evidence are tracked in
+> [docs/status.md](status.md). Native clients, offline PWA mutation, hosted
+> integrations, and automatic external-backend synchronization are future or
+> active work even where they appear in the target diagrams below.
+
 ## Overview
 
 Momentum brings your to-dos, reminders, and CalDAV tasks into one flow — visible as lists or boards. Designed for people who want to see their life in motion.
@@ -59,11 +65,11 @@ graph TB
 
 ### Deployment Models
 
-- **SaaS**: Hosted Momentum server with managed infrastructure, authentication, and updates
-- **Self-hosted**: Single-executable server running as:
-  - Linux: systemd service
-  - Windows: Windows service
-  - Default DB: SQLite (single-file); optional PostgreSQL for multi-user scenarios
+- **SaaS**: A future hosted Momentum deployment (not provided by v0.2.2)
+- **Self-hosted**: Single-executable server with SQLite; the v0.2.2 archive
+  includes per-user Linux and Windows launch helpers. Automatic service lifecycle
+  support is tracked in [#142](https://github.com/chrisbelyea/momentum/issues/142)
+  and [#151](https://github.com/chrisbelyea/momentum/issues/151).
 
 ### Communication
 
@@ -89,7 +95,7 @@ graph TB
 - Default backend for new users
 - Supports full VTODO lifecycle: create, read, update, delete
 
-#### Sync Orchestrator
+#### Sync Orchestrator (library/target architecture)
 - Idempotent sync operations for reliability
 - Per-backend sync state tracking with checkpoints
 - Conflict detection and resolution
@@ -110,7 +116,7 @@ graph TB
 ### 2. Client Components
 
 #### Web Application
-- Progressive Web App (PWA) with offline capabilities
+- Progressive Web App shell for online use; offline mutation is future work
 - Installable on desktop and mobile browsers
 - Uses htmx for progressive enhancement where feasible
 - Responsive design for desktop and mobile viewports
@@ -171,6 +177,11 @@ graph TB
 
 The Sync Orchestrator is responsible for keeping tasks synchronized between the internal CalDAV server and external backends. It implements incremental synchronization and robust conflict resolution to ensure data consistency and reliability.
 
+The provider-neutral sync package defines how tasks can be synchronized between
+the internal store and external backends. The v0.2.2 server does not yet wire
+this package into a runtime scheduler; that work is tracked in [#68](https://github.com/chrisbelyea/momentum/issues/68)
+and [#144](https://github.com/chrisbelyea/momentum/issues/144).
+
 ### Incremental Sync Strategy
 
 Momentum uses incremental synchronization to minimize network traffic and improve performance. Rather than fetching all tasks on every sync, only changes since the last successful sync are transferred.
@@ -222,7 +233,7 @@ sequenceDiagram
 
 #### Sync Triggers
 
-Synchronization can be triggered by:
+When runtime synchronization is available, it can be triggered by:
 - **Manual**: User explicitly requests sync via UI
 - **Periodic**: Scheduled background sync (configurable interval, default 15 minutes)
 - **Push notification**: Backend-initiated webhook or push notification (when supported)

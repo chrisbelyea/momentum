@@ -109,7 +109,11 @@ This document defines the complete specification for the Momentum application. I
 - Database migrations: use a migration tool (see CI/CD section).
 
 ## 14. Tooling and CI/CD
-- Database migrations: Recommend Liquibase or alternatives (Flyway). Decision: use Liquibase for cross-DB support.
+- Database migrations: The v0.2.2 self-hosted release uses the canonical SQLite
+  SQL changelog in `internal/db/schema/changelog/`, generated into the embedded
+  initializer and upgraded by `db.InitializeSchema`. The earlier Liquibase
+  recommendation is superseded for this SQLite release path; no PostgreSQL
+  migration path is shipped.
 - CI:
   - Linting, unit tests for core logic, integration tests for CalDAV.
   - Build clients and server artifacts; run security scans.

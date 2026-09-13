@@ -25,15 +25,19 @@ go test ./...
 
 ### Quick Start
 
-After building and initializing the database, simply run:
+After building, simply run:
 
 ```bash
 ./bin/momentum-server
 ```
 
-The server auto-generates a self-signed TLS certificate on first run and reuses it on
-subsequent runs. Open `https://localhost:8443` in your browser (accept the security
-warning — this is expected for auto-generated certificates).
+The server initializes or upgrades the SQLite database automatically and auto-generates
+a self-signed TLS certificate on first run when `TLS_CERT` and `TLS_KEY` are omitted.
+It reuses that certificate on subsequent runs. Open `https://127.0.0.1:8443` in your
+browser (accept the security warning — this is expected for a development certificate).
+The root page requires an authenticated session. Register the first account with the
+JSON endpoint or use an existing client; browser-native onboarding is tracked in
+[#145](https://github.com/chrisbelyea/momentum/issues/145).
 
 ### Prerequisites
 
@@ -74,6 +78,7 @@ The server is configured via environment variables:
 - `EXTERNAL_HOST`: Public hostname used for HTTP→HTTPS redirect URLs (default: `localhost:<PORT>`)
 - `MOMENTUM_ENCRYPTION_KEY`: Encryption key for backend credentials (required in production)
 - `MOMENTUM_DEV_MODE`: Set to `1` only for local development/integration tests when no encryption key is available
+- `MOMENTUM_DEV_CERT_DIR`: Directory for the auto-generated development certificate (packaged launchers set this inside the data directory)
 
 ## API Endpoints
 
@@ -186,10 +191,10 @@ Valid task status values (from VTODO specification):
 
 ```bash
 # Authenticate first and send the returned session cookie with protected routes.
-# The examples below use integer backend/task IDs and https://localhost:8443.
+# The examples below use integer backend/task IDs and https://127.0.0.1:8443.
 
 # Create a task
-curl -k -X POST https://localhost:8443/caldav/tasks \
+curl -k -X POST https://127.0.0.1:8443/caldav/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "backend_id": 1,
@@ -199,13 +204,13 @@ curl -k -X POST https://localhost:8443/caldav/tasks \
   }'
 
 # List tasks
-curl -k "https://localhost:8443/caldav/tasks?backend_id=1"
+curl -k "https://127.0.0.1:8443/caldav/tasks?backend_id=1"
 
 # Get a task
-curl -k https://localhost:8443/caldav/tasks/{task-id}
+curl -k https://127.0.0.1:8443/caldav/tasks/{task-id}
 
 # Update a task
-curl -k -X PUT https://localhost:8443/caldav/tasks/{task-id} \
+curl -k -X PUT https://127.0.0.1:8443/caldav/tasks/{task-id} \
   -H "Content-Type: application/json" \
   -d '{
     "backend_id": 1,
@@ -215,7 +220,7 @@ curl -k -X PUT https://localhost:8443/caldav/tasks/{task-id} \
   }'
 
 # Delete a task
-curl -k -X DELETE https://localhost:8443/caldav/tasks/{task-id}
+curl -k -X DELETE https://127.0.0.1:8443/caldav/tasks/{task-id}
 ```
 
 ## Architecture
@@ -251,12 +256,16 @@ go test ./... -v
 - Use the existing `models.Task` struct to maintain consistency with the database schema
 - Follow Go standard project layout conventions
 
-### Remaining Work
+### Current release boundaries
 
-- [ ] Hosted-provider CalDAV certification and provider-specific discovery/authentication
-- [ ] Provider-native incremental cursor execution and live-provider interrupted-sync evidence
-- [ ] Browser-level web workflow tests and richer task-field editing
-- [ ] Scheduled background synchronization and browser conflict queue UI
+- The release binary includes the CalDAV client and backend configuration/validation APIs,
+  but automatic external-backend synchronization is not yet wired into the running
+  server. Track [#68](https://github.com/chrisbelyea/momentum/issues/68) and
+  [#144](https://github.com/chrisbelyea/momentum/issues/144).
+- Browser-native account onboarding is not in v0.2.2; use `/auth/register` and
+  `/auth/login` until [#145](https://github.com/chrisbelyea/momentum/issues/145) is merged.
+- Scheduled synchronization, PWA installability automation, and an in-browser
+  conflict queue remain future work; see the active roadmap in `docs/status.md`.
 
 ## References
 

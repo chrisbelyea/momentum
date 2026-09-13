@@ -1,5 +1,11 @@
 # Canonical VTODO Mapping
 
+> This document defines the canonical transport mapping and parser behavior. It
+> is not proof that every mapping is exercised by the v0.2.2 runtime: automatic
+> external synchronization is not yet wired into the release server and remains
+> tracked in [#68](https://github.com/chrisbelyea/momentum/issues/68) and
+> [#144](https://github.com/chrisbelyea/momentum/issues/144).
+
 This document defines the mapping between CalDAV VTODO fields (as defined in RFC 5545) and Momentum's internal task model. This mapping ensures data portability, round-trip fidelity, and consistent behavior across all backends.
 
 ## Overview
@@ -7,7 +13,8 @@ This document defines the mapping between CalDAV VTODO fields (as defined in RFC
 Momentum uses CalDAV VTODO as the canonical task format. All internal operations work with the task model defined here, and backend-specific adapters translate to/from this format. This approach ensures:
 
 - **Portability**: Tasks can be exported and imported in standard iCalendar format
-- **Fidelity**: No data loss when syncing between Momentum and CalDAV servers
+- **Fidelity**: The mapping contract preserves supported fields when the tested
+  adapter is used; automatic synchronization is not part of v0.2.2
 - **Consistency**: Same behavior across all backends through a unified internal model
 - **Extensibility**: Clear foundation for adding non-CalDAV backend integrations
 
@@ -350,7 +357,9 @@ Include when non-null/non-default:
 
 ## Round-Trip Fidelity Guarantees
 
-The following guarantees ensure no data loss when syncing tasks between Momentum and CalDAV servers:
+The following guarantees are the mapping contract and are covered by parser and
+adapter tests where supported. They do not claim that the current release
+automatically synchronizes every configured backend:
 
 ### Guaranteed Fields
 
@@ -402,7 +411,8 @@ Momentum uses these properties to detect and resolve conflicts:
 - If `SEQUENCE` differs: higher sequence wins
 - If `SEQUENCE` equal but `LAST-MODIFIED` differs: latest timestamp wins
 - If both equal: server version wins (conservative approach)
-- User notified of conflicts via sync status UI
+- Conflict records can be surfaced through the authenticated recovery API; an
+  in-browser conflict queue is not part of v0.2.2.
 
 ## Validation Rules
 
@@ -450,7 +460,8 @@ When importing VTODO from external sources:
 
 - **Full support**: All standard VTODO properties supported
 - **Extensions**: Server-specific extensions stored but not interpreted
-- **Sync**: Efficient sync using `REPORT` queries with time-range filters
+- **Sync**: The adapter supports the tested REPORT/query paths; release-binary
+  runtime synchronization remains tracked in #68 and #144.
 
 ### Future Backend Integrations
 

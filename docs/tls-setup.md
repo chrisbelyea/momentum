@@ -7,7 +7,8 @@ redirected to HTTPS instead.
 For quick evaluation and local development, the server **auto-generates** a
 self-signed certificate on first run (see [Auto-Generated Development Certificates](#auto-generated-development-certificates)).
 For production deployments, set `TLS_CERT` and `TLS_KEY` to the paths of a
-CA-issued certificate and key.
+CA-issued certificate and key. See [operations.md](operations.md) for the full
+install and data-protection procedure.
 
 ## Environment Variables
 
@@ -19,6 +20,7 @@ CA-issued certificate and key.
 | `LISTEN_ADDR`        | No       | `127.0.0.1`        | HTTPS bind host. The loopback default keeps auto-generated certificates local; set a non-loopback address only with a trusted certificate and network controls. |
 | `EXTERNAL_HOST`      | No       | `localhost:<PORT>` | Public hostname (and optional port) used to build HTTP→HTTPS redirect URLs. Set this to your domain in production (e.g., `example.com` or `example.com:8443`) |
 | `HTTP_REDIRECT_PORT` | No       | —                  | If set, an HTTP server on this port redirects all requests to HTTPS |
+| `MOMENTUM_DEV_CERT_DIR` | No | user certificate directory | Directory for the generated development certificate and private key |
 
 > **Minimum TLS version**: TLS 1.3. Cipher suite selection is managed by Go's
 > `crypto/tls` package, which only enables strong suites by default.
@@ -50,8 +52,9 @@ WARNING: DEVELOPMENT MODE: Using auto-generated self-signed certificate
 - **Validity**: 1 year from generation date
 - **SANs**: `localhost`, `127.0.0.1`, `::1`
 - **Subject**: `CN=localhost, O=Momentum Development`
-- **Storage**: `~/.momentum/dev-certs/dev-cert.pem` and `dev-key.pem`
-  (Windows: `%USERPROFILE%\.momentum\dev-certs\`)
+- **Storage**: `~/.momentum/dev-certs/dev-cert.pem` and `dev-key.pem` by default.
+  The packaged Linux and Windows launchers set `MOMENTUM_DEV_CERT_DIR` beneath
+  their protected application data directory.
 
 ### Resetting the certificate
 
@@ -70,7 +73,7 @@ The new certificate will be generated on the next server start.
 ### Browser trust
 
 Auto-generated certificates are **not trusted by browsers**. You will see a security
-warning the first time you open `https://localhost:8443`. This is expected for
+warning the first time you open `https://127.0.0.1:8443`. This is expected for
 development use. Click through the warning (or add a browser exception) to proceed.
 
 For a trusted development certificate that avoids browser warnings, use
@@ -108,7 +111,7 @@ export PORT=8443
 ./bin/momentum-server
 ```
 
-Then open `https://localhost:8443` in your browser.
+Then open `https://127.0.0.1:8443` in your browser.
 
 ### Option B: openssl self-signed certificate
 
@@ -190,26 +193,23 @@ format and set `TLS_CERT`/`TLS_KEY` to their paths. The requirements are:
 
 ---
 
-## systemd Service Example
+## Service deployment
 
-```ini
-# /etc/systemd/system/momentum.service
-[Unit]
-Description=Momentum Task Server
-After=network.target
+Use the archive's native per-user helper on Linux:
 
-[Service]
-Type=simple
-User=momentum
-EnvironmentFile=/etc/momentum/env
-ExecStart=/usr/local/bin/momentum-server
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
+```bash
+./scripts/packaging/linux/install-user.sh ./momentum-server
+systemctl --user status momentum.service
 ```
 
-`/etc/momentum/env`:
+The helper writes the service unit, database path, generated certificate path,
+and encryption key under the invoking user's protected data directory. Do not
+copy a root-level unit into `/etc/systemd/system` without separately designing
+permissions and secret handling. The helper's lifecycle is tracked in
+[#151](https://github.com/chrisbelyea/momentum/issues/151).
+
+If an operator manages a service outside the packaged helper, the environment
+must still contain equivalent values:
 
 ```bash
 TLS_CERT=/etc/letsencrypt/live/your.domain.com/fullchain.pem
@@ -234,6 +234,11 @@ MOMENTUM_ENCRYPTION_KEY=<your-strong-random-key>
 - [ ] HTTP redirect port is enabled, or HTTP port is firewalled/closed to prevent unnecessary connection attempts
 - [ ] Certificate renewal is automated (certbot timer, cron, or equivalent)
 - [ ] Firewall rules allow only the HTTPS port (and optionally HTTP redirect port) inbound
+
+The packaged server binds HTTPS to IPv4 loopback (`127.0.0.1`) by default. Set
+`LISTEN_ADDR` explicitly for a network-facing deployment only after installing a
+certificate valid for that host and applying firewall or reverse-proxy access
+controls.
 
 ## References
 

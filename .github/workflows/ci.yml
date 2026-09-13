@@ -17,6 +17,14 @@ jobs:
       - name: Verify embedded schema is generated from canonical changelog
         run: scripts/db/generate-init-sql.sh --check
 
+  documentation-accuracy:
+    name: Release documentation contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate release documentation and archive contract
+        run: scripts/release/validate-docs.sh
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -177,11 +185,11 @@ jobs:
             $ready = $false
             for ($attempt = 1; $attempt -le 30; $attempt++) {
               try {
-                $response = Invoke-WebRequest -Uri 'https://localhost:8443/health' -SkipCertificateCheck -UseBasicParsing
+                $response = Invoke-WebRequest -Uri 'https://127.0.0.1:8443/health' -SkipCertificateCheck -UseBasicParsing
                 if ($response.StatusCode -eq 200) { $ready = $true; break }
               } catch { Start-Sleep -Seconds 1 }
             }
-            if (-not $ready) { throw 'Momentum Windows service did not become healthy on https://localhost:8443/health' }
+            if (-not $ready) { throw 'Momentum Windows service did not become healthy on https://127.0.0.1:8443/health' }
           } finally {
             if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
               Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue

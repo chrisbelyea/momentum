@@ -76,6 +76,9 @@ archives:
       # Native launch and service setup for users who install from an archive.
       - scripts/packaging/**
       - docs/release-packaging.md
+      - docs/operations.md
+      - docs/tls-setup.md
+      - docs/database-schema.md
 
 checksum:
   name_template: "checksums.txt"

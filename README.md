@@ -3,6 +3,7 @@ Momentum brings your to-dos, reminders, and CalDAV tasks into one flow — visib
 
 ## Documentation
 - **Project Status**: [docs/status.md](docs/status.md) — where we are and what's next
+- **Operating guide**: [docs/operations.md](docs/operations.md) — install, upgrade, backup, restore, and rollback
 - Vision: [requirements/vision.md](requirements/vision.md)
 - Specification: [requirements/specification.md](requirements/specification.md)
 - Features: [requirements/feature-list.md](requirements/feature-list.md)
@@ -43,9 +44,11 @@ the pinned Nextcloud-compatible CI service remains explicitly out of scope.
 
 ## Running the Server
 
-Momentum requires TLS. Set `TLS_CERT` and `TLS_KEY` before starting the server.
-See [docs/tls-setup.md](docs/tls-setup.md) for dev (mkcert / openssl) and production
-(Let's Encrypt) certificate setup.
+Momentum serves HTTPS only. For a first local run, the binary creates and reuses a
+self-signed development certificate automatically; set `TLS_CERT` and `TLS_KEY`
+when using an operator-managed certificate in production. See
+[docs/operations.md](docs/operations.md) for a complete first-run workflow and
+[docs/tls-setup.md](docs/tls-setup.md) for certificate setup.
 
 By default, Momentum stores its SQLite database in the current user's writable
 OS configuration directory: `~/.config/Momentum/momentum.db` on Linux and
@@ -55,10 +58,15 @@ database location; an explicit value is used unchanged.
 ```bash
 export TLS_CERT=path/to/cert.pem
 export TLS_KEY=path/to/key.pem
-./bin/momentum-server          # listens on :8443 by default
+./bin/momentum-server          # listens on HTTPS port 8443 by default
 ```
 
+The release binary starts with a local task backend, but the web pages require an
+authenticated session. Register the first account through `/auth/register` (or use
+an existing API client), then open `https://127.0.0.1:8443`. Browser-native onboarding
+is tracked in [#145](https://github.com/chrisbelyea/momentum/issues/145).
+
 ## CI/CD and Tooling (Overview)
-- Database schema: canonical SQL changelog with generated embedded initialization; see [docs/database-schema.md](docs/database-schema.md).
+- Database schema: canonical SQL changelog with generated embedded initialization; see [docs/database-schema.md](docs/database-schema.md). Do not use the retired Liquibase instructions.
 - CI: schema drift validation, unit/integration tests, release-binary workflow checks, and platform lifecycle checks.
 - Packaging: single-executable server, embedded PWA assets, Linux/Windows helpers, and native macOS release artifacts.
