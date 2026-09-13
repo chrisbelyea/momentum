@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/chrisbelyea/momentum/internal/crypto"
@@ -237,6 +238,37 @@ func TestHandler_UpdateBackend(t *testing.T) {
 
 	if updated.Name != "Updated Name" {
 		t.Errorf("Expected name to be updated to 'Updated Name', got %s", updated.Name)
+	}
+}
+
+func TestHandler_UpdateExternalBackendPreservesRedactedPassword(t *testing.T) {
+	database := setupBackendHandlerTestDB(t)
+	defer database.Close()
+	repo := db.NewBackendRepository(database)
+	handler := NewHandler(repo)
+	backend := &models.Backend{
+		UserID: 1, Type: models.BackendTypeExternalCalDAV, Name: "Calendar",
+		Config: &models.BackendConfig{URL: "https://calendar.example.com/dav", Username: "alice", Password: "stored-secret"},
+	}
+	if err := repo.Create(backend); err != nil {
+		t.Fatal(err)
+	}
+
+	// The browser receives a redacted GET response and therefore submits an
+	// empty password when only changing the display name. The handler must keep
+	// the existing credential rather than making the backend unusable.
+	body := strings.NewReader(`{"backend_type":"external_caldav","name":"Renamed calendar","config":{"url":"https://calendar.example.com/dav","username":"alice","password":""}}`)
+	rec := httptest.NewRecorder()
+	handler.HandleBackend(rec, httptest.NewRequest(http.MethodPut, fmt.Sprintf("/backends/%d", backend.ID), body))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update returned %d: %s", rec.Code, rec.Body.String())
+	}
+	got, err := repo.Get(backend.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || got.Name != "Renamed calendar" || got.Config == nil || got.Config.Password != "stored-secret" {
+		t.Fatalf("redacted password was not preserved: %#v", got)
 	}
 }
 

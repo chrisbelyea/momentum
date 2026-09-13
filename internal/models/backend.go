@@ -54,6 +54,9 @@ func (b *Backend) Validate() error {
 	if b.Type == "" {
 		return ErrInvalidBackend
 	}
+	if b.Type != BackendTypeInternal && b.Type != BackendTypeExternalCalDAV {
+		return ErrInvalidBackend
+	}
 
 	// Validate CalDAV specific configuration
 	if b.Type == BackendTypeExternalCalDAV {
