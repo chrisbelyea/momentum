@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
+	"strings"
 )
 
 type contextKey string
@@ -17,11 +19,9 @@ func UserIDFromRequest(r *http.Request) (int, bool) {
 
 func (s *Service) Require(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch || r.Method == http.MethodDelete {
-			if origin := r.Header.Get("Origin"); origin != "" && origin != "https://"+r.Host && origin != "http://"+r.Host {
-				http.Error(w, "cross-site request rejected", http.StatusForbidden)
-				return
-			}
+		if isMutation(r.Method) && !SameOrigin(r) {
+			http.Error(w, "cross-site request rejected", http.StatusForbidden)
+			return
 		}
 		id, err := s.UserID(r)
 		if err != nil {
@@ -30,6 +30,49 @@ func (s *Service) Require(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, contextWithUser(r, id))
 	})
+}
+
+// RequirePage protects an HTML navigation while preserving API clients'
+// machine-readable 401 response from Require. The original request is passed
+// through a validated relative return URL so login cannot become an open
+// redirect.
+func (s *Service) RequirePage(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id, err := s.UserID(r)
+		if err != nil {
+			returnURL := SafeReturnURL(r.URL.RequestURI())
+			location := "/login?return=" + url.QueryEscape(returnURL)
+			http.Redirect(w, r, location, http.StatusSeeOther)
+			return
+		}
+		next.ServeHTTP(w, contextWithUser(r, id))
+	})
+}
+
+func isMutation(method string) bool {
+	return method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch || method == http.MethodDelete
+}
+
+// SameOrigin permits non-browser API clients that omit Origin, but rejects an
+// explicitly supplied cross-site Origin on every state-changing route.
+func SameOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	return origin == "" || origin == "https://"+r.Host || origin == "http://"+r.Host
+}
+
+// SafeReturnURL returns only an in-origin relative request target.
+func SafeReturnURL(raw string) string {
+	if raw == "" {
+		return "/"
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.IsAbs() || u.Host != "" || !strings.HasPrefix(u.Path, "/") || strings.HasPrefix(u.Path, "//") {
+		return "/"
+	}
+	if u.Path == "" {
+		return "/"
+	}
+	return u.RequestURI()
 }
 
 func contextWithUser(r *http.Request, id int) *http.Request {
@@ -43,9 +86,17 @@ func (s *Service) Routes() http.Handler {
 			http.Error(w, "method not allowed", 405)
 			return
 		}
+		if !SameOrigin(r) {
+			http.Error(w, "cross-site request rejected", http.StatusForbidden)
+			return
+		}
 		var in struct{ Email, Password string }
 		if json.NewDecoder(r.Body).Decode(&in) != nil {
 			http.Error(w, "invalid request", 400)
+			return
+		}
+		if !s.RegistrationAvailable() {
+			http.Error(w, ErrRegistrationClosed.Error(), http.StatusForbidden)
 			return
 		}
 		id, err := s.CreateUser(in.Email, in.Password)
@@ -60,6 +111,10 @@ func (s *Service) Routes() http.Handler {
 	mux.HandleFunc("/auth/login", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", 405)
+			return
+		}
+		if !SameOrigin(r) {
+			http.Error(w, "cross-site request rejected", http.StatusForbidden)
 			return
 		}
 		var in struct{ Email, Password string }
@@ -81,6 +136,10 @@ func (s *Service) Routes() http.Handler {
 	mux.HandleFunc("/auth/logout", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", 405)
+			return
+		}
+		if !SameOrigin(r) {
+			http.Error(w, "cross-site request rejected", http.StatusForbidden)
 			return
 		}
 		s.Logout(w, r)

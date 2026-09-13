@@ -237,6 +237,7 @@
     <div class="view-nav">
         <a href="/" class="active">📋 Board</a>
         <a href="/list">📄 List</a>
+        <form method="post" action="/logout" style="display:inline"><button type="submit" class="btn btn-secondary">Sign out</button></form>
     </div>
 
     <form id="task-form" class="task-form">
@@ -606,14 +607,19 @@
             this.classList.remove('drag-over');
 
             if (draggedElement != null) {
-                const taskId = draggedElement.getAttribute('data-task-id');
+                // Capture the card and version before issuing an asynchronous
+                // request; a second quick drag must not change this request's
+                // optimistic-concurrency token.
+                const card = draggedElement;
+                const taskId = card.getAttribute('data-task-id');
+                const version = card.dataset.version || '';
                 const newStatus = this.closest('.column').getAttribute('data-status');
                 
                 // Move the element in the DOM
-                this.appendChild(draggedElement);
+                this.appendChild(card);
 
                 // Update the task status on the server
-                updateTaskStatus(taskId, newStatus);
+                updateTaskStatus(taskId, newStatus, version);
 
                 // Remove empty states and update counts
                 updateColumnDisplay();
@@ -622,10 +628,10 @@
             return false;
         }
 
-        function updateTaskStatus(taskId, newStatus) {
+        function updateTaskStatus(taskId, newStatus, version) {
                 fetch(`/api/tasks/${taskId}/status`, {
                     method: 'PATCH',
-                    headers: mutationHeaders(draggedElement.dataset.version),
+                    headers: mutationHeaders(version),
                 body: JSON.stringify({ status: newStatus })
             })
             .then(response => {

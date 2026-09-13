@@ -16,6 +16,8 @@ jobs:
         with: { fetch-depth: 0 }
       - name: Verify canonical embedded schema
         run: scripts/db/generate-init-sql.sh --check
+      - name: Verify authentication API documentation
+        run: scripts/release/validate-auth-docs.sh
       - name: Build draft release
         env: { GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
         run: |
@@ -191,6 +193,20 @@ jobs:
         shell: bash
         run: scripts/release/integration-test.sh "$(find . -type f -name '${{ matrix.binary }}' -print -quit)"
 
+  upgrade-onboarding:
+    name: Release upgrade onboarding (Linux)
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Linux release artifact
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: gh release download "${{ github.ref_name }}" --pattern 'momentum-server-linux-amd64.tar.gz' --repo "${{ github.repository }}"
+      - name: Extract Linux archive
+        run: tar -xzf momentum-server-linux-amd64.tar.gz
+      - name: Exercise first-account upgrade workflow
+        run: scripts/release/upgrade-onboarding-test.sh "$(find . -type f -name 'momentum-server' -print -quit)"
+
   verify-arm64-artifact:
     name: Verify Linux ARM64 artifact
     needs: [goreleaser, macos-attach]
@@ -204,7 +220,7 @@ jobs:
 
   publish:
     name: Publish release
-    needs: [integration-test, verify-arm64-artifact]
+    needs: [integration-test, upgrade-onboarding, verify-arm64-artifact]
     runs-on: ubuntu-latest
     steps:
       - name: Publish only after all validation
