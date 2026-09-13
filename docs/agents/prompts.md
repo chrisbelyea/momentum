@@ -17,7 +17,7 @@ Acceptance criteria:
 - The server README is updated to reflect the TLS requirement and link to docs/tls-setup.md.
 - All existing Go tests continue to pass; add at least one test that verifies HTTP is rejected.
 
-Follow the conventions in .github/AGENTS.md: branch name feature/tls-only-defaults, include rollback-safe changes, update docs alongside code.
+Follow the conventions in AGENTS.md: branch name feature/tls-only-defaults, include rollback-safe changes, update docs alongside code.
 ```
 
 ### Issue #9 — Web kanban scaffold (drag-and-drop)
@@ -32,7 +32,7 @@ Acceptance criteria:
 - Add at least one integration test verifying the board renders tasks and status update round-trips.
 - Update cmd/server/README.md with the new UI endpoint.
 
-Follow the conventions in .github/AGENTS.md: branch name feature/web-kanban-scaffold, prefer htmx, keep JS minimal.
+Follow the conventions in AGENTS.md: branch name feature/web-kanban-scaffold, prefer htmx, keep JS minimal.
 ```
 
 ### Issue #10 — List view with filter/sort
@@ -48,7 +48,7 @@ Acceptance criteria:
 - Add tests for the filter and sort logic.
 - Update cmd/server/README.md with the new /list endpoint.
 
-Follow the conventions in .github/AGENTS.md: branch name feature/list-view-filter-sort.
+Follow the conventions in AGENTS.md: branch name feature/list-view-filter-sort.
 ```
 
 ### Issue #8 — External CalDAV connection configuration
@@ -63,7 +63,7 @@ Acceptance criteria:
 - Add unit tests for connection validation and credential encryption/decryption.
 - Update docs/design-overview.md and cmd/server/README.md with the new capability.
 
-Follow the conventions in .github/AGENTS.md: branch name feature/external-caldav-connection, use OS keychain on clients, encrypt at rest on server.
+Follow the conventions in AGENTS.md: branch name feature/external-caldav-connection, use OS keychain on clients, encrypt at rest on server.
 ```
 
 ### Issue #12 — Credential storage policy (OS keychains)
@@ -74,10 +74,10 @@ Acceptance criteria:
 - A new doc docs/credential-storage.md documents the OS keychain mechanism for each platform:
   Windows (Windows Credential Manager / DPAPI), macOS (Keychain), Linux (Secret Service / libsecret).
 - The document includes code or pseudocode examples for reading/writing secrets on each platform.
-- The document is referenced from docs/design-overview.md (Security section) and .github/AGENTS.md.
+- The document is referenced from docs/design-overview.md (Security section) and AGENTS.md.
 - If any client-side Go code exists that handles credentials, update it to use the documented approach.
 
-Follow the conventions in .github/AGENTS.md: branch name docs/credential-storage-policy.
+Follow the conventions in AGENTS.md: branch name docs/credential-storage-policy.
 ```
 
 ### Issue #15 — Release packaging plan
@@ -92,7 +92,7 @@ Acceptance criteria:
 - The doc explains how to set up a self-hosted instance end-to-end (binary + DB migration + TLS).
 - Update README.md and cmd/server/README.md to link to docs/packaging.md.
 
-Follow the conventions in .github/AGENTS.md: branch name feature/release-packaging.
+Follow the conventions in AGENTS.md: branch name feature/release-packaging.
 ```
 
 ---
