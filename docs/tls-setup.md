@@ -235,11 +235,10 @@ MOMENTUM_ENCRYPTION_KEY=<your-strong-random-key>
 - [ ] Certificate renewal is automated (certbot timer, cron, or equivalent)
 - [ ] Firewall rules allow only the HTTPS port (and optionally HTTP redirect port) inbound
 
-The v0.2.2 server listens on all interfaces for `PORT`, while the generated
-certificate only names localhost and loopback. Keep a local deployment behind a
-host firewall; for network access use a trusted certificate and a deliberate
-firewall/reverse-proxy policy. Loopback-by-default binding is tracked in
-[#143](https://github.com/chrisbelyea/momentum/issues/143).
+The packaged server binds HTTPS to IPv4 loopback (`127.0.0.1`) by default. Set
+`LISTEN_ADDR` explicitly for a network-facing deployment only after installing a
+certificate valid for that host and applying firewall or reverse-proxy access
+controls.
 
 ## References
 

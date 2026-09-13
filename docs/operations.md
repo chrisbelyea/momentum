@@ -158,10 +158,10 @@ the pre-upgrade backup until the new release has passed production verification.
 
 ## Scope and limitations
 
-- The server's default v0.2.2 listener binds all interfaces. The generated
-  certificate authenticates only localhost/loopback, so use a host firewall or a
-  trusted reverse proxy for any network deployment. Loopback-by-default binding
-  is tracked in [#143](https://github.com/chrisbelyea/momentum/issues/143).
+- The packaged server binds HTTPS to IPv4 loopback (`127.0.0.1`) by default.
+  Set `LISTEN_ADDR` explicitly for a network-facing deployment only after
+  installing a certificate valid for that host and applying firewall or
+  reverse-proxy access controls.
 - External CalDAV backend configuration and validation are available through the
   authenticated `/backends` JSON API. Runtime import/push scheduling is not yet
   part of the release binary.

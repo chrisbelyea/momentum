@@ -54,6 +54,28 @@ for file in "${local_docs[@]}"; do
   fi
 done
 
+# Release-facing deployment guidance must match the packaged server contract:
+# HTTPS binds to IPv4 loopback by default, and network exposure is an explicit
+# LISTEN_ADDR opt-in. Reject the superseded all-interface/#143 wording anywhere
+# operators may rely on it.
+deployment_docs=(
+  "${ROOT}/docs/operations.md"
+  "${ROOT}/docs/release-packaging.md"
+  "${ROOT}/docs/security.md"
+  "${ROOT}/docs/security-implementation.md"
+  "${ROOT}/docs/tls-setup.md"
+)
+if ! grep -Eqi 'binds? .*127\.0\.0\.1.* by default' "${ROOT}/docs/operations.md" || \
+   ! grep -q 'LISTEN_ADDR' "${ROOT}/docs/operations.md"; then
+  echo 'operations guide must document the 127.0.0.1 default and LISTEN_ADDR opt-in' >&2
+  exit 1
+fi
+if rg -ni 'binds? all interfaces|listens? on all interfaces|loopback-by-default binding' \
+  "${deployment_docs[@]}"; then
+  echo 'stale all-interface listener guidance found in release documentation' >&2
+  exit 1
+fi
+
 # These are contributor-facing rules. A positive Liquibase workflow here would
 # direct future changes to a schema source that is not used by the release
 # binary; a prohibition that names the retired system is valid documentation.

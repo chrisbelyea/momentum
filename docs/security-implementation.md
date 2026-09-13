@@ -68,11 +68,11 @@ development certificate under `MOMENTUM_DEV_CERT_DIR` (or the user's
 deployments must provide a CA-issued certificate. An optional HTTP redirect listener
 can be enabled via `HTTP_REDIRECT_PORT`.
 
-The v0.2.2 server listens on all interfaces for the configured `PORT`. Its
+The packaged server binds HTTPS to IPv4 loopback (`127.0.0.1`) by default. Its
 auto-generated certificate is valid only for localhost and loopback addresses.
-For local use, keep the port behind the host firewall; for a network deployment,
-provide a trusted certificate and restrict exposure with a firewall or reverse
-proxy. Loopback-by-default binding is tracked in [#143](https://github.com/chrisbelyea/momentum/issues/143).
+For a network deployment, set `LISTEN_ADDR` explicitly, provide a trusted
+certificate valid for that host, and restrict exposure with a firewall or
+reverse proxy.
 
 ```go
 server := &http.Server{
