@@ -17,16 +17,16 @@ grep -q "Join-Path \$env:ProgramFiles 'Momentum'" "${ROOT}/scripts/packaging/win
 grep -q "Join-Path \$env:ProgramData 'Momentum'" "${ROOT}/scripts/packaging/windows/Install-Momentum.ps1"
 grep -q 'icacls.exe' "${ROOT}/scripts/packaging/windows/Install-Momentum.ps1"
 test -f "${ROOT}/scripts/packaging/windows/Test-Launcher.ps1"
-grep -q 'ConvertTo-ProcessArgument' "${ROOT}/scripts/packaging/windows/Test-Launcher.ps1"
-if grep -Eq "'-File',[[:space:]]*\$LauncherPath|'-BinaryPath',[[:space:]]*\$BinaryPath|'-DataDirectory',[[:space:]]*\$dataDirectory" "${ROOT}/scripts/packaging/windows/Test-Launcher.ps1"; then
-  echo 'Windows launcher test passes unquoted path arguments to Start-Process.' >&2
-  exit 1
-fi
 test -f "${ROOT}/scripts/packaging/windows/Test-TaskWorkflow.ps1"
 grep -q 'supportsSkipCertificateCheck' "${ROOT}/scripts/packaging/windows/Test-TaskWorkflow.ps1"
 grep -q 'ServerCertificateValidationCallback' "${ROOT}/scripts/packaging/windows/Test-TaskWorkflow.ps1"
 if sed -n '/\$request = @{/,/^    }/p' "${ROOT}/scripts/packaging/windows/Test-TaskWorkflow.ps1" | grep -q 'SkipCertificateCheck'; then
   echo 'Windows task workflow passes SkipCertificateCheck unconditionally.' >&2
+  exit 1
+fi
+grep -q 'ConvertTo-ProcessArgument' "${ROOT}/scripts/packaging/windows/Test-Launcher.ps1"
+if grep -Eq "'-File',[[:space:]]*\$LauncherPath|'-BinaryPath',[[:space:]]*\$BinaryPath|'-DataDirectory',[[:space:]]*\$dataDirectory" "${ROOT}/scripts/packaging/windows/Test-Launcher.ps1"; then
+  echo 'Windows launcher test passes unquoted path arguments to Start-Process.' >&2
   exit 1
 fi
 echo 'Native packaging files validated.'
