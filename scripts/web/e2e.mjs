@@ -10,7 +10,9 @@ import { chromium } from 'playwright';
 
 const binary = process.env.MOMENTUM_E2E_BINARY || join(process.cwd(), 'bin', 'momentum-server');
 const port = Number(process.env.MOMENTUM_E2E_PORT || 18444);
-const baseURL = `https://localhost:${port}`;
+// The packaged server binds IPv4 loopback by default. Avoid localhost's
+// IPv6-first resolution on hosts where ::1 is tried before 127.0.0.1.
+const baseURL = `https://127.0.0.1:${port}`;
 const password = 'browser-e2e-password';
 const email = `browser-e2e-${Date.now()}@example.invalid`;
 const dataDir = await mkdtemp(join(tmpdir(), 'momentum-browser-e2e-'));
@@ -47,7 +49,10 @@ const server = spawn(binary, [], {
 let browser;
 try {
   await waitForServer(`${baseURL}/health`);
-  const launchOptions = { headless: true };
+  // Service-worker script fetches do not consistently honor the context-level
+  // ignoreHTTPSErrors option. The test server uses Momentum's documented
+  // self-signed development certificate, so explicitly allow it in Chromium.
+  const launchOptions = { headless: true, args: ['--ignore-certificate-errors'] };
   if (process.env.MOMENTUM_E2E_CHROMIUM) launchOptions.executablePath = process.env.MOMENTUM_E2E_CHROMIUM;
   browser = await chromium.launch(launchOptions);
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
@@ -70,6 +75,111 @@ try {
   const backendID = await page.locator('#task-backend').inputValue();
   assert.ok(backendID, 'registration should select the local backend');
   assert.equal(await page.locator('.task-card').count(), 0);
+
+  // Validate the installable PWA contract in a real Chromium secure context.
+  // The worker intentionally provides an offline static shell only: pages,
+  // API responses, and mutations remain network/authentication dependent.
+  const pwaManifest = await page.evaluate(async () => {
+    const response = await fetch('/static/manifest.json', { cache: 'no-store' });
+    return {
+      status: response.status,
+      contentType: response.headers.get('content-type'),
+      body: await response.json(),
+    };
+  });
+  assert.equal(pwaManifest.status, 200);
+  assert.match(pwaManifest.contentType ?? '', /application\/json/);
+  assert.equal(pwaManifest.body.name, 'Momentum');
+  assert.equal(pwaManifest.body.start_url, '/');
+  assert.equal(pwaManifest.body.scope, '/');
+  assert.equal(pwaManifest.body.display, 'standalone');
+  assert.deepEqual(
+    pwaManifest.body.icons.map(icon => [icon.src, icon.sizes, icon.type]),
+    [
+      ['/static/icon-192.png', '192x192', 'image/png'],
+      ['/static/icon-512.png', '512x512', 'image/png'],
+    ],
+  );
+  for (const icon of pwaManifest.body.icons) {
+    const iconResponse = await page.request.get(`${baseURL}${icon.src}`);
+    assert.equal(iconResponse.status(), 200, `${icon.src} must be served by the release binary`);
+    assert.match(iconResponse.headers()['content-type'] ?? '', /^image\/png/);
+  }
+
+  // The worker is root-scoped so it can control installed app navigations.
+  // Its no-cache response header is what lets a newly installed release
+  // trigger registration.update() instead of being hidden by browser caches.
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  const worker = await page.evaluate(async () => {
+    // Register explicitly as well as through the page template so this check
+    // cannot hang forever if the root-scoped worker fails to install.
+    const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    const ready = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('service worker did not become ready')), 10000)),
+    ]);
+    await ready.update();
+    return {
+      scope: registration.scope,
+      scriptURL: registration.active?.scriptURL ?? '',
+      state: registration.active?.state ?? '',
+      controller: Boolean(navigator.serviceWorker.controller),
+    };
+  });
+  assert.equal(worker.scope, `${baseURL}/`);
+  assert.equal(worker.scriptURL, `${baseURL}/sw.js`);
+  assert.equal(worker.state, 'activated');
+  assert.equal(worker.controller, true);
+  const workerResponse = await page.request.get(`${baseURL}/sw.js`);
+  assert.equal(workerResponse.status(), 200);
+  assert.match(workerResponse.headers()['content-type'] ?? '', /javascript/);
+  assert.match(workerResponse.headers()['cache-control'] ?? '', /no-cache/);
+  assert.equal(workerResponse.headers()['service-worker-allowed'], '/');
+
+  const cacheState = await page.evaluate(async () => {
+    const cachesByName = [];
+    for (const name of await caches.keys()) {
+      const cache = await caches.open(name);
+      cachesByName.push({
+        name,
+        urls: (await cache.keys()).map(request => new URL(request.url).pathname),
+      });
+    }
+    return cachesByName;
+  });
+  assert.ok(cacheState.some(cache => cache.name === 'momentum-static-v1'), 'worker must install its static cache');
+  const cachedURLs = cacheState.flatMap(cache => cache.urls);
+  assert.ok(cachedURLs.length > 0, 'worker static cache must contain the offline shell');
+  assert.ok(
+    cachedURLs.every(path => path.startsWith('/static/') && path !== '/static/sw.js'),
+    `authenticated pages and API responses must not be cached: ${cachedURLs.join(', ')}`,
+  );
+
+  // Static assets remain readable when disconnected, while the authenticated
+  // page/API cannot be served from a stale cache and therefore fails closed.
+  await context.setOffline(true);
+  const offlineManifest = await page.evaluate(async () => {
+    const response = await fetch('/static/manifest.json');
+    return { status: response.status, body: await response.json() };
+  });
+  assert.equal(offlineManifest.status, 200);
+  assert.equal(offlineManifest.body.name, 'Momentum');
+  const offlineAPI = await page.evaluate(async (id) => {
+    try {
+      // Chromium can leave an offline network request pending instead of
+      // rejecting it immediately. Bound the probe so this acceptance test
+      // deterministically verifies that no authenticated API data is cached.
+      const response = await fetch(`/api/tasks?backend_id=${id}`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(5000),
+      });
+      return { status: response.status };
+    } catch (error) {
+      return { error: String(error) };
+    }
+  }, backendID);
+  assert.ok(offlineAPI.error, `authenticated API must not be cached offline: ${JSON.stringify(offlineAPI)}`);
+  await context.setOffline(false);
 
   // Create a rich task via accessible controls and verify the board reload.
   await page.locator('#task-title').fill('Browser workflow task');
