@@ -27,6 +27,19 @@ PID=$!
 
 for _ in $(seq 1 20); do
 	if curl -kfsS "https://127.0.0.1:${PORT}/health" >/dev/null; then
+		if ! command -v ss >/dev/null 2>&1; then
+			echo 'ss is required to verify loopback-only binding' >&2
+			exit 1
+		fi
+		listeners="$(ss -ltn | awk 'NR > 1 {print $4}')"
+		printf '%s\n' "${listeners}" | grep -Eq "^127\\.0\\.0\\.1:${PORT}$" || {
+			echo "launcher did not bind the expected loopback address (listeners: ${listeners})" >&2
+			exit 1
+		}
+		if printf '%s\n' "${listeners}" | grep -Eq "^(0\\.0\\.0\\.0|\\[::\\]):${PORT}$"; then
+			echo 'launcher unexpectedly bound a non-loopback wildcard address' >&2
+			exit 1
+		fi
 		[[ -s "${TEMP_DIR}/data/encryption.key" ]] || { echo 'launcher did not persist encryption key' >&2; exit 1; }
 		[[ -f "${TEMP_DIR}/data/momentum.db" ]] || { echo 'launcher did not create database' >&2; exit 1; }
 		key_mode="$(stat -c '%a' "${TEMP_DIR}/data/encryption.key")"

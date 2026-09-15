@@ -301,6 +301,8 @@ After=network.target
 ExecStart=/usr/local/bin/momentum-server
 Environment="DB_PATH=/var/lib/momentum/momentum.db"
 Environment="PORT=8443"
+# Optional: leave unset for loopback-only binding (127.0.0.1)
+# Environment="LISTEN_ADDR=10.0.0.20"
 Environment="MOMENTUM_ENCRYPTION_KEY=<your-key>"
 WorkingDirectory=/usr/local/share/momentum
 Restart=on-failure
@@ -323,6 +325,11 @@ Register the binary as a Windows service using [NSSM](https://nssm.cc/) or the b
 sc.exe create Momentum binPath= "C:\momentum\momentum-server.exe" start= auto
 sc.exe start Momentum
 ```
+
+Packaged launches bind HTTPS to loopback (`127.0.0.1`) by default. Set
+`LISTEN_ADDR` explicitly for a network-facing deployment only after installing
+a certificate valid for that host and applying firewall or reverse-proxy access
+controls.
 
 ---
 

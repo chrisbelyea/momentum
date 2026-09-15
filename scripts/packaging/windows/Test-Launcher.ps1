@@ -52,6 +52,13 @@ try {
         Get-Content -LiteralPath $stdoutPath, $stderrPath -ErrorAction SilentlyContinue
         throw 'Windows packaged launcher did not become healthy'
     }
+    $listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop)
+    if (-not ($listeners | Where-Object { $_.LocalAddress -eq '127.0.0.1' })) {
+        throw "launcher did not bind 127.0.0.1:$Port"
+    }
+    if ($listeners | Where-Object { $_.LocalAddress -in @('0.0.0.0', '::') }) {
+        throw "launcher unexpectedly bound a wildcard address on port $Port"
+    }
     if (-not (Test-Path -LiteralPath (Join-Path $dataDirectory 'encryption.key'))) { throw 'launcher did not persist encryption key' }
     if (-not (Test-Path -LiteralPath (Join-Path $dataDirectory 'momentum.db'))) { throw 'launcher did not create database' }
     $workflowPath = Join-Path $PSScriptRoot 'Test-TaskWorkflow.ps1'
