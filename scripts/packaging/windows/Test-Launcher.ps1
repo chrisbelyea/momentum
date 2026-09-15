@@ -37,6 +37,8 @@ try {
     }
     if (-not (Test-Path -LiteralPath (Join-Path $dataDirectory 'encryption.key'))) { throw 'launcher did not persist encryption key' }
     if (-not (Test-Path -LiteralPath (Join-Path $dataDirectory 'momentum.db'))) { throw 'launcher did not create database' }
+    $workflowPath = Join-Path $PSScriptRoot 'Test-TaskWorkflow.ps1'
+    & $workflowPath -BaseUrl "https://127.0.0.1:$Port"
     Write-Host 'Windows packaged launcher passed first-run health/configuration checks.'
 } finally {
     if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }

@@ -10,7 +10,18 @@ grep -q 'New-Service' "${ROOT}/scripts/packaging/windows/Install-Momentum.ps1"
 grep -q '\$env:DB_PATH' "${ROOT}/scripts/packaging/windows/Run-Momentum.ps1"
 grep -q '\[int\]\$Port = 8443' "${ROOT}/scripts/packaging/windows/Run-Momentum.ps1"
 grep -q 'MOMENTUM_ENCRYPTION_KEY' "${ROOT}/scripts/packaging/windows/Run-Momentum.ps1"
+grep -q 'PSBoundParameters.ContainsKey.*EncryptionKeyFile' "${ROOT}/scripts/packaging/windows/Run-Momentum.ps1"
 grep -q '\[string\]\$EncryptionKey' "${ROOT}/scripts/packaging/windows/Install-Momentum.ps1"
 grep -q 'MOMENTUM_SERVICE_NAME' "${ROOT}/scripts/packaging/windows/Install-Momentum.ps1"
+grep -q "Join-Path \$env:ProgramFiles 'Momentum'" "${ROOT}/scripts/packaging/windows/Install-Momentum.ps1"
+grep -q "Join-Path \$env:ProgramData 'Momentum'" "${ROOT}/scripts/packaging/windows/Install-Momentum.ps1"
+grep -q 'icacls.exe' "${ROOT}/scripts/packaging/windows/Install-Momentum.ps1"
 test -f "${ROOT}/scripts/packaging/windows/Test-Launcher.ps1"
+test -f "${ROOT}/scripts/packaging/windows/Test-TaskWorkflow.ps1"
+grep -q 'supportsSkipCertificateCheck' "${ROOT}/scripts/packaging/windows/Test-TaskWorkflow.ps1"
+grep -q 'ServerCertificateValidationCallback' "${ROOT}/scripts/packaging/windows/Test-TaskWorkflow.ps1"
+if sed -n '/\$request = @{/,/^    }/p' "${ROOT}/scripts/packaging/windows/Test-TaskWorkflow.ps1" | grep -q 'SkipCertificateCheck'; then
+  echo 'Windows task workflow passes SkipCertificateCheck unconditionally.' >&2
+  exit 1
+fi
 echo 'Native packaging files validated.'
