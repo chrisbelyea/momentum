@@ -80,6 +80,11 @@ type SyncOperation struct {
 	Operation string
 	Key       string
 	Run       func(context.Context) error
+	// Resume is called when Store reports a completed operation. Operations
+	// whose successful result is needed by the caller (for example a push that
+	// must return a provider ETag) can recover that result from the provider
+	// rather than leaving the caller with an incomplete cycle result.
+	Resume func(context.Context) error
 }
 
 // SyncEvent is emitted after each provider operation attempt. Consumers can
@@ -210,6 +215,9 @@ func (r Runner) Run(ctx context.Context, operation SyncOperation) error {
 			return fmt.Errorf("check sync operation %q: %w", operation.Key, err)
 		}
 		if completed {
+			if operation.Resume != nil {
+				return operation.Resume(ctx)
+			}
 			return nil
 		}
 	}

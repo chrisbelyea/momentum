@@ -366,10 +366,24 @@ func (c *Client) CreateTodo(ctx context.Context, collectionHref string, todo *vt
 	if err != nil {
 		return nil, err
 	}
-	u, _ := url.Parse(collection)
-	resource := strings.TrimRight(u.Path, "/") + "/" + url.PathEscape(todo.UID) + ".ics"
-	u.Path = resource
-	return c.putTodo(ctx, u.String(), body, "*")
+	u, err := c.todoHref(collection, todo.UID)
+	if err != nil {
+		return nil, err
+	}
+	return c.putTodo(ctx, u, body, "*")
+}
+
+func (c *Client) todoHref(collectionHref, uid string) (string, error) {
+	collection, err := c.resolveRemote(collectionHref)
+	if err != nil {
+		return "", err
+	}
+	u, err := url.Parse(collection)
+	if err != nil {
+		return "", err
+	}
+	u.Path = strings.TrimRight(u.Path, "/") + "/" + url.PathEscape(uid) + ".ics"
+	return c.resolveRemote(u.String())
 }
 
 // UpdateTodo replaces a resource. etag is sent as If-Match when non-empty.
@@ -557,6 +571,7 @@ type syncCollectionReport struct {
 
 type syncCollectionResponse struct {
 	Href     string                   `xml:"href"`
+	Status   string                   `xml:"status"`
 	Propstat []syncCollectionPropstat `xml:"propstat"`
 }
 
@@ -574,6 +589,17 @@ type syncCollectionProperties struct {
 func syncCollectionProp(response syncCollectionResponse) (int, syncCollectionProperties) {
 	status := http.StatusOK
 	var prop syncCollectionProperties
+	// RFC 6578 servers commonly report a deleted member with a response-level
+	// 404/410 and no propstat at all. Treat that status as authoritative instead
+	// of defaulting to 200 and attempting a GET for a resource that is gone.
+	if fields := strings.Fields(response.Status); len(fields) >= 2 {
+		if parsed, err := strconv.Atoi(fields[1]); err == nil {
+			status = parsed
+			if status < 200 || status >= 300 {
+				return status, prop
+			}
+		}
+	}
 	for _, candidate := range response.Propstat {
 		prop = candidate.Prop
 		fields := strings.Fields(candidate.Status)

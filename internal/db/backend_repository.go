@@ -83,6 +83,35 @@ func (r *BackendRepository) List(userID int) ([]*models.Backend, error) {
 	return backends, nil
 }
 
+// ListAll returns every configured backend. It is intended for trusted
+// scheduler code; HTTP callers must continue using List, which scopes rows to
+// the authenticated user.
+func (r *BackendRepository) ListAll() ([]*models.Backend, error) {
+	rows, err := r.db.Query("SELECT id FROM backends ORDER BY id")
+	if err != nil {
+		return nil, fmt.Errorf("failed to query all backends: %w", err)
+	}
+	defer rows.Close()
+	var backends []*models.Backend
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("failed to scan backend ID: %w", err)
+		}
+		backend, err := r.Get(id)
+		if err != nil {
+			return nil, err
+		}
+		if backend != nil {
+			backends = append(backends, backend)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating backend IDs: %w", err)
+	}
+	return backends, nil
+}
+
 // Get returns a single backend by ID
 func (r *BackendRepository) Get(id int) (*models.Backend, error) {
 	query := `

@@ -104,6 +104,26 @@ jobs:
       - name: Run authenticated VTODO lifecycle against Radicale
         run: scripts/caldav/radicale-interop.sh
 
+  runtime-sync-release-radicale:
+    name: Runtime sync release binary (Radicale)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned standards-focused CalDAV server
+        run: python -m pip install --disable-pip-version-check 'radicale==3.1.8'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go mod download
+      - name: Build release binary
+        run: go build -trimpath -o bin/momentum-server ./cmd/server
+      - name: Exercise authenticated runtime sync workflow
+        run: scripts/release/runtime-sync-radicale.sh "$(pwd)/bin/momentum-server"
+
   caldav-nextcloud-interop:
     name: CalDAV interoperability (Nextcloud Tasks)
     runs-on: ubuntu-latest

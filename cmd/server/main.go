@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/chrisbelyea/momentum/internal/config"
 	"github.com/chrisbelyea/momentum/internal/crypto"
 	"github.com/chrisbelyea/momentum/internal/db"
+	runtimeSync "github.com/chrisbelyea/momentum/internal/runtime"
 	"github.com/chrisbelyea/momentum/internal/web"
 	webassets "github.com/chrisbelyea/momentum/web"
 	_ "github.com/mattn/go-sqlite3"
@@ -111,6 +113,18 @@ func runServer(stop <-chan os.Signal) {
 	// Initialize Web handler
 	webHandler := web.NewHandler(taskRepo, backendRepo)
 	webHandler.SetSyncRepository(db.NewSyncRepository(database))
+	syncRepository := db.NewSyncRepository(database)
+	syncService := runtimeSync.NewService(backendRepo, taskRepo, syncRepository)
+	syncContext, cancelSync := context.WithCancel(context.Background())
+	defer cancelSync()
+	if interval := strings.TrimSpace(os.Getenv("MOMENTUM_SYNC_INTERVAL")); interval != "" {
+		duration, parseErr := time.ParseDuration(interval)
+		if parseErr != nil || duration <= 0 {
+			log.Fatalf("MOMENTUM_SYNC_INTERVAL must be a positive duration (for example 15m): %v", parseErr)
+		}
+		syncService.StartScheduler(syncContext, duration)
+		log.Printf("External CalDAV synchronization scheduler enabled with interval %s", duration)
+	}
 
 	// Setup routes
 	mux := http.NewServeMux()
@@ -158,6 +172,8 @@ func runServer(stop <-chan os.Signal) {
 	mux.Handle("/api/tasks/", authService.Require(http.HandlerFunc(webHandler.HandleTasks)))
 	mux.Handle("/api/sync/conflicts", authService.Require(http.HandlerFunc(webHandler.HandleSyncConflicts)))
 	mux.Handle("/api/sync/conflicts/", authService.Require(http.HandlerFunc(webHandler.HandleSyncConflicts)))
+	mux.Handle("/api/sync/run", authService.Require(http.HandlerFunc(syncService.HandleRun)))
+	mux.Handle("/api/sync/status", authService.Require(http.HandlerFunc(syncService.HandleStatus)))
 
 	// CalDAV routes
 	mux.Handle("/caldav/tasks", authService.Require(http.HandlerFunc(caldavHandler.HandleTasks)))
@@ -254,6 +270,7 @@ func runServer(stop <-chan os.Signal) {
 			log.Fatalf("Server failed to start: %v", err)
 		}
 	case <-stop:
+		cancelSync()
 		log.Println("Shutdown signal received; stopping Momentum gracefully")
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
