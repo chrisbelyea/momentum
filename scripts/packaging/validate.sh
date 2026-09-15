@@ -24,4 +24,9 @@ if sed -n '/\$request = @{/,/^    }/p' "${ROOT}/scripts/packaging/windows/Test-T
   echo 'Windows task workflow passes SkipCertificateCheck unconditionally.' >&2
   exit 1
 fi
+grep -q 'ConvertTo-ProcessArgument' "${ROOT}/scripts/packaging/windows/Test-Launcher.ps1"
+if grep -Eq "'-File',[[:space:]]*\$LauncherPath|'-BinaryPath',[[:space:]]*\$BinaryPath|'-DataDirectory',[[:space:]]*\$dataDirectory" "${ROOT}/scripts/packaging/windows/Test-Launcher.ps1"; then
+  echo 'Windows launcher test passes unquoted path arguments to Start-Process.' >&2
+  exit 1
+fi
 echo 'Native packaging files validated.'

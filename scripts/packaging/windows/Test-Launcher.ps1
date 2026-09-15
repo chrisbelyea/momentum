@@ -9,14 +9,31 @@ $ErrorActionPreference = 'Stop'
 if (-not (Test-Path -LiteralPath $BinaryPath -PathType Leaf)) { throw "Binary not found: $BinaryPath" }
 if (-not (Test-Path -LiteralPath $LauncherPath -PathType Leaf)) { throw "Launcher not found: $LauncherPath" }
 
-$dataDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ("momentum-packaging-" + [Guid]::NewGuid().ToString('N'))
+# Deliberately include a space so the child PowerShell invocation exercises
+# the path quoting contract instead of passing only conventional temp paths.
+$dataDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ("momentum packaging-" + [Guid]::NewGuid().ToString('N'))
 $stdoutPath = Join-Path $dataDirectory 'server.stdout.log'
 $stderrPath = Join-Path $dataDirectory 'server.stderr.log'
 New-Item -ItemType Directory -Force -Path $dataDirectory | Out-Null
 $process = $null
+
+function ConvertTo-ProcessArgument {
+    param([Parameter(Mandatory = $true)] [string]$Value)
+
+    # Windows PowerShell 5.1 joins Start-Process -ArgumentList into one
+    # command line. Quote path arguments using CommandLineToArgvW-compatible
+    # escaping so installation and temp paths containing spaces survive.
+    if ($Value -notmatch '[\s"]') { return $Value }
+    $escaped = [regex]::Replace($Value, '(\\*)"', '$1$1\"')
+    $escaped = [regex]::Replace($escaped, '(\\+)$', '$1$1')
+    return '"' + $escaped + '"'
+}
+
 try {
-    $argumentList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $LauncherPath,
-        '-BinaryPath', $BinaryPath, '-DataDirectory', $dataDirectory, '-Port', $Port)
+    $argumentList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+        (ConvertTo-ProcessArgument $LauncherPath), '-BinaryPath',
+        (ConvertTo-ProcessArgument $BinaryPath), '-DataDirectory',
+        (ConvertTo-ProcessArgument $dataDirectory), '-Port', $Port)
     $process = Start-Process -FilePath 'powershell.exe' -ArgumentList $argumentList -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru
     $ready = $false
     for ($i = 0; $i -lt 20; $i++) {
