@@ -187,7 +187,7 @@ At runtime the server reads configuration from environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DB_PATH` | OS user config directory / `Momentum/momentum.db` | Path to the SQLite database file. On Linux this is typically `~/.config/Momentum/momentum.db`; on Windows it is typically `%AppData%\\Momentum\\momentum.db`. |
+| `DB_PATH` | OS user config directory / `Momentum/momentum.db` | Path to the SQLite database file. On Linux this is typically `~/.config/Momentum/momentum.db`; on Windows it is typically `%AppData%\\Momentum\\momentum.db`. Missing parents for explicit filesystem paths are created with user-only permissions; SQLite special targets and `file:` URIs are passed through unchanged. |
 | `PORT` | `8443` | HTTPS TCP port to listen on |
 | `MOMENTUM_ENCRYPTION_KEY` | *(required in production)* | AES encryption key for stored credentials; the server exits when absent unless explicit `MOMENTUM_DEV_MODE=1` is set |
 

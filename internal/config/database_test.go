@@ -18,6 +18,31 @@ func TestDatabasePathPreservesExplicitDBPath(t *testing.T) {
 	if path != explicit {
 		t.Fatalf("DatabasePath() = %q, want explicit path %q", path, explicit)
 	}
+	info, err := os.Stat(filepath.Dir(explicit))
+	if err != nil {
+		t.Fatalf("explicit database parent was not created: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("explicit database parent %q is not a directory", filepath.Dir(explicit))
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0077 != 0 {
+		t.Fatalf("explicit database parent permissions = %o, want user-only", info.Mode().Perm())
+	}
+}
+
+func TestDatabasePathPreservesSQLiteSpecialTargets(t *testing.T) {
+	for _, target := range []string{":memory:", "file:shared?mode=memory&cache=shared"} {
+		t.Run(target, func(t *testing.T) {
+			t.Setenv(databaseEnvVar, target)
+			path, err := DatabasePath()
+			if err != nil {
+				t.Fatalf("DatabasePath() returned error: %v", err)
+			}
+			if path != target {
+				t.Fatalf("DatabasePath() = %q, want %q", path, target)
+			}
+		})
+	}
 }
 
 func TestDatabasePathUsesWritableOSConfigDirectory(t *testing.T) {
