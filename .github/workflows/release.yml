@@ -202,9 +202,112 @@ jobs:
       - name: Validate archive contains the executable
         run: tar -tzf momentum-server-linux-arm64.tar.gz | grep -Eq '(^|/)momentum-server$'
 
+  linux-deb:
+    name: Build Linux DEB (${{ matrix.arch }})
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: amd64 }
+          - { arch: arm64 }
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Download release binary
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: gh release download "${{ github.ref_name }}" --pattern "momentum-server-linux-${{ matrix.arch }}.tar.gz" --repo "${{ github.repository }}"
+      - name: Extract binary
+        run: |
+          tar -xzf "momentum-server-linux-${{ matrix.arch }}.tar.gz"
+          BINARY="$(find . -type f -name 'momentum-server' -print -quit)"
+          echo "BINARY=$BINARY" >> $GITHUB_ENV
+      - name: Build DEB package
+        env:
+          VERSION: "${{ github.ref_name }}"
+          ARCH: "${{ matrix.arch }}"
+          BINARY: "$BINARY"
+        run: |
+          chmod +x scripts/packaging/linux/build-deb.sh
+          ./scripts/packaging/linux/build-deb.sh
+          DEB_FILE="$(find dist -name 'momentum_*.deb' -print -quit)"
+          echo "DEB_FILE=$DEB_FILE" >> $GITHUB_ENV
+      - name: Upload DEB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: momentum-linux-${{ matrix.arch }}.deb
+          path: "${{ env.DEB_FILE }}"
+          if-no-files-found: error
+
+  linux-rpm:
+    name: Build Linux RPM (${{ matrix.arch }})
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64 }
+          - { arch: aarch64 }
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Download release binary
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: gh release download "${{ github.ref_name }}" --pattern "momentum-server-linux-${{ matrix.arch }}.tar.gz" --repo "${{ github.repository }}"
+      - name: Extract binary
+        run: |
+          tar -xzf "momentum-server-linux-${{ matrix.arch }}.tar.gz"
+          BINARY="$(find . -type f -name 'momentum-server' -print -quit)"
+          echo "BINARY=$BINARY" >> $GITHUB_ENV
+      - name: Build RPM spec
+        env:
+          VERSION: "${{ github.ref_name }}"
+          ARCH: "${{ matrix.arch }}"
+          BINARY: "$BINARY"
+        run: |
+          chmod +x scripts/packaging/linux/build-rpm.sh
+          ./scripts/packaging/linux/build-rpm.sh
+      - name: Upload RPM spec artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: momentum-linux-${{ matrix.arch }}.spec
+          path: dist/linux-rpm/BUILD/momentum.spec
+          if-no-files-found: error
+
+  windows-msi:
+    name: Build Windows MSI
+    needs: goreleaser
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Download release binary
+        env: { GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: gh release download "${{ github.ref_name }}" --pattern 'momentum-server-windows-amd64.zip' --repo "${{ github.repository }}"
+      - name: Extract binary
+        shell: pwsh
+        run: Expand-Archive -Path "momentum-server-windows-amd64.zip" -DestinationPath . -Force
+      - name: Build MSI package
+        shell: pwsh
+        env:
+          VERSION: "${{ github.ref_name }}"
+          BINARY_PATH: "$(Get-ChildItem -Recurse -File -Filter 'momentum-server.exe' | Select-Object -First 1).FullName"
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/packaging/windows/build-msi.ps1 -Version $env:VERSION -BinaryPath $env:BINARY_PATH
+          MSI_FILE="$(Get-ChildItem -Recurse -File -Filter '*.msi' | Select-Object -First 1).FullName"
+          echo "MSI_FILE=$MSI_FILE" >> $GITHUB_ENV
+      - name: Upload MSI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: momentum-windows-amd64.msi
+          path: "${{ env.MSI_FILE }}"
+          if-no-files-found: error
+
   publish:
     name: Publish release
-    needs: [integration-test, verify-arm64-artifact]
+    needs: [integration-test, verify-arm64-artifact, linux-deb, linux-rpm, windows-msi]
     runs-on: ubuntu-latest
     steps:
       - name: Publish only after all validation
