@@ -73,7 +73,45 @@ try {
   assert.ok(backendID, 'registration should select the local backend');
   assert.equal(await page.locator('.task-card').count(), 0);
 
+  // Create a second owned backend for the URL-state regression. Filtering a
+  // non-default backend must not silently fall back to backend 2.
+  const secondaryBackend = await page.evaluate(async () => {
+    const response = await fetch('/backends', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name: 'Filter state backend', backend_type: 'internal'}),
+    });
+    return {status: response.status, body: await response.json()};
+  });
+  assert.equal(secondaryBackend.status, 201);
+  const secondaryBackendID = String(secondaryBackend.body.id);
+  await page.goto(`${baseURL}/?backend_id=${secondaryBackendID}`);
+  assert.equal(await page.locator('#task-backend').inputValue(), secondaryBackendID);
+  await page.locator('#task-title').fill('Filter state task');
+  await page.locator('#task-tags').fill('filter-target');
+  await Promise.all([
+    page.waitForNavigation({waitUntil: 'domcontentloaded'}),
+    page.getByRole('button', {name: 'Create task'}).click(),
+  ]);
+  await page.getByText('Filter state task').waitFor();
+  await page.locator('.filter-bar input[name="tag"]').fill('filter-target');
+  await Promise.all([
+    page.waitForNavigation({waitUntil: 'domcontentloaded'}),
+    page.getByRole('button', {name: 'Apply'}).click(),
+  ]);
+  assert.equal(new URL(page.url()).searchParams.get('backend_id'), secondaryBackendID);
+  assert.match(await page.locator('body').textContent(), /Filter state task/);
+  await page.goto(`${baseURL}/list?backend_id=${secondaryBackendID}`);
+  await page.locator('input[name="tag"]').fill('filter-target');
+  await Promise.all([
+    page.waitForNavigation({waitUntil: 'domcontentloaded'}),
+    page.getByRole('button', {name: 'Apply'}).click(),
+  ]);
+  assert.equal(new URL(page.url()).searchParams.get('backend_id'), secondaryBackendID);
+  assert.match(await page.locator('body').textContent(), /Filter state task/);
+
   // Create a rich task via accessible controls and verify the board reload.
+  await page.goto(`${baseURL}/?backend_id=${backendID}`);
   await page.locator('#task-title').fill('Browser workflow task');
   await page.locator('#task-description').fill('Created through the real board');
   await page.locator('#task-due').fill('2026-12-31');
@@ -159,7 +197,7 @@ try {
   ]);
   await page.goto(`${baseURL}/list?backend_id=${backendID}`);
   assert.doesNotMatch(await page.locator('body').textContent(), /Concurrent device wins/);
-  console.log('Momentum browser E2E passed: authenticated board/list create, rich edit, conflict, failure reconciliation, delete');
+  console.log('Momentum browser E2E passed: authenticated board/list create, backend filter state, rich edit, conflict, failure reconciliation, delete');
   passed = true;
 } finally {
   if (browser) await browser.close();
