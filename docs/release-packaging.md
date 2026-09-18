@@ -30,9 +30,11 @@ Visit the [Releases page](https://github.com/chrisbelyea/momentum/releases) and 
 |----------|---------|
 | Linux x86-64 | `momentum-server-linux-amd64.tar.gz` |
 | Linux ARM64 | `momentum-server-linux-arm64.tar.gz` |
-| Windows x86-64 | `momentum-server-windows-amd64.zip` |
-| macOS Intel | `momentum-server-darwin-amd64.tar.gz` |
-| macOS Apple Silicon | `momentum-server-darwin-arm64.tar.gz` |
+| Windows x86-64 | `momentum-server-windows-amd64.zip` | `momentum-windows-amd64.msi` |
+| Linux x86-64 | `momentum-server-linux-amd64.tar.gz` | `momentum-linux-amd64.deb`, `momentum-linux-x86_64.rpm` |
+| Linux ARM64 | `momentum-server-linux-arm64.tar.gz` | `momentum-linux-arm64.deb`, `momentum-linux-aarch64.rpm` |
+| macOS Intel | `momentum-server-darwin-amd64.tar.gz` | — |
+| macOS Apple Silicon | `momentum-server-darwin-arm64.tar.gz` | — |
 
 Each release also includes a `checksums.txt` file containing SHA-256 checksums for all archives.
 
@@ -187,7 +189,7 @@ At runtime the server reads configuration from environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DB_PATH` | OS user config directory / `Momentum/momentum.db` | Path to the SQLite database file. On Linux this is typically `~/.config/Momentum/momentum.db`; on Windows it is typically `%AppData%\\Momentum\\momentum.db`. |
+| `DB_PATH` | OS user config directory / `Momentum/momentum.db` | Path to the SQLite database file. On Linux this is typically `~/.config/Momentum/momentum.db`; on Windows it is typically `%AppData%\\Momentum\\momentum.db`. If an explicit path is given and it is not a `:memory:` or `file:` URI, its missing parent directory is created with user-only (0700) permissions before SQLite opens it. |
 | `PORT` | `8443` | HTTPS TCP port to listen on |
 | `MOMENTUM_ENCRYPTION_KEY` | *(required in production)* | AES encryption key for stored credentials; the server exits when absent unless explicit `MOMENTUM_DEV_MODE=1` is set |
 
@@ -388,6 +390,47 @@ same-origin static-asset service worker. Browser-level installability remains
 unverified; see [the documented PWA scope](pwa.md).
 
 ---
+
+## Native Installer Packages (#176)
+
+Momentum publishes platform-native installers alongside the portable archives.
+
+### Windows MSI
+- **Target:** Windows x86-64
+- **Features:** Service registration, silent/unattended install, upgrade preservation of DB/encryption/config/certs, uninstall without deleting user data by default
+- **Build:** `scripts/packaging/windows/build-msi.ps1`
+- **Install options:** UI installer or silent via `msiexec /i momentum.msi /qn`
+- **Service:** `Momentum` registered in Windows Service Control Manager
+- **Data:** `%ProgramData%\Momentum` for database and dev certificate; `%AppData%\Momentum` for per-user encryption key
+
+### Linux DEB
+- **Targets:** x86-64, ARM64
+- **Features:** systemd user service, upgrade preservation, clean uninstall without data deletion
+- **Build:** `scripts/packaging/linux/build-deb.sh`
+- **Install:** `sudo apt install ./momentum_${version}_${arch}.deb`
+- **Service:** `momentum.service` (systemd user unit)
+- **Data:** `/var/lib/momentum` (preserved on upgrade/uninstall)
+
+### Linux RPM
+- **Targets:** x86-64, ARM64
+- **Features:** systemd service, upgrade preservation, clean uninstall
+- **Build:** `scripts/packaging/linux/build-rpm.sh`
+- **Install:** `sudo rpm -i momentum-${version}-${arch}.rpm`
+- **Service:** `momentum.service` (systemd)
+- **Data:** `/var/lib/momentum` (preserved on upgrade/uninstall)
+
+### Package Metadata
+Each native package declares supported architectures, dependencies, service ownership, and versioning. Checksums and signatures are published alongside archives in `checksums.txt`.
+
+### Upgrades and Rollback
+- Stop the service before upgrading (`systemctl --user stop momentum.service` or `Stop-Service Momentum`)
+- Backup the SQLite database while the server is stopped
+- Runtime migrations are applied on startup
+- Keep a copy of the previous binary until the upgraded server passes its health and task-workflow checks
+- Rollback: reinstall the previous package version
+
+### Verification and Signatures
+Packages include checksums. Release CI runs install/upgrade smoke tests on supported runners before publication. See [CI Artifacts](#ci-artifacts) above for integration test details.
 
 ## Complete Local Build
 
