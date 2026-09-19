@@ -89,7 +89,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           # Radicale 3.1.8 is pinned for reproducibility and supports the
           # maintained Python 3.12 runtime used by this integration job.
