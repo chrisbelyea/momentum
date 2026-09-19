@@ -65,7 +65,7 @@ jobs:
           shasum -a 256 "${archive}" > "${archive}.sha256"
           mkdir -p macos-assets
           mv "${archive}" "${archive}.sha256" macos-assets/
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos-${{ matrix.arch }}
           path: macos-assets/
