@@ -104,15 +104,24 @@ escape_unit_path() {
 	value=${value//%/%%}
 	value=${value//\\/\\x5c}
 	value=${value// /\\x20}
-	value=${value//$'\t'/\\x09}
+	value=${value//$'	'/\\x09}
 	value=${value//\"/\\x22}
+	printf '%s' "${value}"
+}
+
+escape_env_file_path() {
+	local value="$1"
+	# EnvironmentFile paths only need % escaping; systemd unit paths do not use
+	# \x20/\x09/\x22 escaping. Over-applying those escapes makes the path
+	# unrecognizable when the path contains spaces or percent signs.
+	value=${value//%/%%}
 	printf '%s' "${value}"
 }
 
 escape_sed_value() {
 	printf '%s' "$1" | sed 's/[\\&|]/\\&/g'
 }
-service_env_file="$(escape_sed_value "$(escape_unit_path "${ENV_FILE}")")"
+service_env_file="$(escape_sed_value "$(escape_env_file_path "${ENV_FILE}")")"
 service_data_dir="$(escape_sed_value "$(escape_unit_path "${DATA_DIR}")")"
 service_binary="$(escape_sed_value "$(escape_unit_path "${TARGET}")")"
 sed -e "s|@MOMENTUM_ENV_FILE@|${service_env_file}|g" \
