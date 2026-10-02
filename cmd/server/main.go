@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -21,7 +22,7 @@ import (
 	"github.com/chrisbelyea/momentum/internal/config"
 	"github.com/chrisbelyea/momentum/internal/crypto"
 	"github.com/chrisbelyea/momentum/internal/db"
-	runtimeSync "github.com/chrisbelyea/momentum/internal/runtime"
+	"github.com/chrisbelyea/momentum/internal/runtime"
 	"github.com/chrisbelyea/momentum/internal/web"
 	webassets "github.com/chrisbelyea/momentum/web"
 	_ "github.com/mattn/go-sqlite3"
@@ -46,6 +47,11 @@ func runServer(stop <-chan os.Signal) {
 		log.Fatalf("Failed to determine database path: %v", err)
 	}
 	port := getEnv("PORT", "8443")
+	addr, err := configuredListenAddress(port)
+	if err != nil {
+		log.Fatalf("Invalid listen configuration: %v", err)
+	}
+	listenHost, _, _ := net.SplitHostPort(addr)
 	tlsCert := os.Getenv("TLS_CERT")
 	tlsKey := os.Getenv("TLS_KEY")
 	httpRedirectPort := os.Getenv("HTTP_REDIRECT_PORT")
@@ -106,17 +112,23 @@ func runServer(stop <-chan os.Signal) {
 	backendRepo := db.NewBackendRepository(database)
 	authService := auth.NewService(database)
 
-	// Initialize handlers
-	caldavHandler := caldav.NewHandler(taskRepo)
-	backendHandler := backend.NewHandler(backendRepo)
-
-	// Initialize Web handler
-	webHandler := web.NewHandler(taskRepo, backendRepo)
-	webHandler.SetSyncRepository(db.NewSyncRepository(database))
+	// Initialize sync service and repository for runtime synchronization.
 	syncRepository := db.NewSyncRepository(database)
-	syncService := runtimeSync.NewService(backendRepo, taskRepo, syncRepository)
+	syncService := runtime.NewService(backendRepo, taskRepo, syncRepository)
 	syncContext, cancelSync := context.WithCancel(context.Background())
 	defer cancelSync()
+
+	// Reconcile any stale 'running' checkpoint left behind by a prior process
+	// interruption before accepting work. This makes a restarted server resume
+	// from the last durable cursor instead of falsely reporting an in-flight
+	// cycle. We log but do not fail startup so the server stays available even
+	// if reconciliation hits an unexpected error.
+	if reconciled, err := syncService.ReconcileStaleRuns(context.Background()); err != nil {
+		log.Printf("WARNING: could not reconcile stale sync checkpoints: %v", err)
+	} else if len(reconciled) > 0 {
+		log.Printf("Reconciled %d stale running sync checkpoint(s) on startup", len(reconciled))
+	}
+
 	if interval := strings.TrimSpace(os.Getenv("MOMENTUM_SYNC_INTERVAL")); interval != "" {
 		duration, parseErr := time.ParseDuration(interval)
 		if parseErr != nil || duration <= 0 {
@@ -125,6 +137,14 @@ func runServer(stop <-chan os.Signal) {
 		syncService.StartScheduler(syncContext, duration)
 		log.Printf("External CalDAV synchronization scheduler enabled with interval %s", duration)
 	}
+
+	// Initialize Web handler
+	webHandler := web.NewHandler(taskRepo, backendRepo)
+	webHandler.SetSyncRepository(syncRepository)
+
+	// Initialize handlers
+	caldavHandler := caldav.NewHandler(taskRepo)
+	backendHandler := backend.NewHandler(backendRepo)
 
 	// Setup routes
 	mux := http.NewServeMux()
@@ -172,6 +192,8 @@ func runServer(stop <-chan os.Signal) {
 	mux.Handle("/api/tasks/", authService.Require(http.HandlerFunc(webHandler.HandleTasks)))
 	mux.Handle("/api/sync/conflicts", authService.Require(http.HandlerFunc(webHandler.HandleSyncConflicts)))
 	mux.Handle("/api/sync/conflicts/", authService.Require(http.HandlerFunc(webHandler.HandleSyncConflicts)))
+
+	// Runtime sync routes
 	mux.Handle("/api/sync/run", authService.Require(http.HandlerFunc(syncService.HandleRun)))
 	mux.Handle("/api/sync/status", authService.Require(http.HandlerFunc(syncService.HandleStatus)))
 
@@ -216,7 +238,10 @@ func runServer(stop <-chan os.Signal) {
 			}
 		}
 
-		redirectAddr := fmt.Sprintf(":%s", httpRedirectPort)
+		redirectAddr, err := configuredListenAddress(httpRedirectPort)
+		if err != nil {
+			log.Fatalf("Invalid HTTP redirect listen configuration: %v", err)
+		}
 		go func() {
 			ln, err := net.Listen("tcp", redirectAddr)
 			if err != nil {
@@ -242,9 +267,8 @@ func runServer(stop <-chan os.Signal) {
 	}
 
 	// Start TLS server — TLS 1.3 minimum, strong cipher suites enforced by Go's crypto/tls.
-	addr := fmt.Sprintf(":%s", port)
 	log.Printf("Starting Momentum %s on %s (TLS)", version, addr)
-	log.Printf("Listening on https://localhost:%s", port)
+	log.Printf("Listening on https://%s", net.JoinHostPort(listenHost, port))
 	log.Printf("Database: %s", dbPath)
 
 	server := &http.Server{
@@ -285,4 +309,20 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// configuredListenAddress returns a validated TCP listen address. Loopback is
+// the safe default because packaged development certificates authenticate only
+// localhost/loopback. Operators may explicitly opt into a hostname or IP via
+// LISTEN_ADDR when a trusted certificate and network controls are in place.
+func configuredListenAddress(port string) (string, error) {
+	host := strings.TrimSpace(getEnv("LISTEN_ADDR", "127.0.0.1"))
+	if host == "" || strings.ContainsAny(host, "\r\n/\\") {
+		return "", fmt.Errorf("LISTEN_ADDR must be a non-empty hostname or IP address")
+	}
+	portNumber, err := strconv.Atoi(strings.TrimSpace(port))
+	if err != nil || portNumber < 1 || portNumber > 65535 {
+		return "", fmt.Errorf("PORT must be an integer between 1 and 65535")
+	}
+	return net.JoinHostPort(host, strconv.Itoa(portNumber)), nil
 }

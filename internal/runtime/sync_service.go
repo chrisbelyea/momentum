@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -125,7 +126,12 @@ func (s *Service) RunBackend(ctx context.Context, backendID int) (Result, error)
 	now := time.Now().UTC()
 	started := inputCheckpoint
 	started.Status, started.LastStartedAt, started.LastError = "running", &now, ""
-	if err := s.syncRepo.ApplyBatch(ctx, started, nil, nil, nil); err != nil {
+	// Write the running checkpoint through a bounded, non-cancelled context so
+	// shutdown, client disconnects, or request cancellation cannot leave the
+	// durable checkpoint stuck in a running state.
+	persistCtx, cancelPersist := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancelPersist()
+	if err := s.syncRepo.ApplyBatch(persistCtx, started, nil, nil, nil); err != nil {
 		return Result{}, err
 	}
 
@@ -166,13 +172,13 @@ func (s *Service) RunBackend(ctx context.Context, backendID int) (Result, error)
 		Mappings:  mappings,
 	}, nil)
 	if err != nil {
-		return s.failed(ctx, backendID, err)
+		return s.failed(persistCtx, backendID, err)
 	}
 	complete := started
 	complete.Cursor = cycle.NextCursor
 	complete.Status, complete.LastCompletedAt, complete.LastError = "complete", &now, ""
 	complete.RetryCount, complete.NextRetryAt = 0, nil
-	if err := s.syncRepo.ApplyCycle(ctx, complete, cycle); err != nil {
+	if err := s.syncRepo.ApplyCycle(persistCtx, complete, cycle); err != nil {
 		return Result{}, err
 	}
 	return Result{BackendID: backendID, Collection: collection, Checkpoint: complete}, nil
@@ -180,14 +186,27 @@ func (s *Service) RunBackend(ctx context.Context, backendID int) (Result, error)
 
 func (s *Service) failed(ctx context.Context, backendID int, syncErr error) (Result, error) {
 	now := time.Now().UTC()
-	checkpoint := db.SyncCheckpoint{BackendID: backendID, Status: "failed", LastStartedAt: &now, LastError: syncErr.Error(), RetryCount: 1}
+	status := "failed"
+	if errors.Is(syncErr, context.Canceled) || errors.Is(syncErr, context.DeadlineExceeded) {
+		status = "interrupted"
+	}
+	checkpoint := db.SyncCheckpoint{BackendID: backendID, Status: status, LastStartedAt: &now, LastError: syncErr.Error(), RetryCount: 1}
 	if prior, err := s.syncRepo.GetCheckpoint(backendID); err == nil && prior != nil {
 		checkpoint = *prior
-		checkpoint.Status, checkpoint.LastError, checkpoint.LastStartedAt = "failed", syncErr.Error(), &now
-		checkpoint.RetryCount++
+		checkpoint.Status, checkpoint.LastError, checkpoint.LastStartedAt = status, syncErr.Error(), &now
+		if status == "failed" {
+			checkpoint.RetryCount++
+		} else {
+			// Interrupted runs keep the prior retry state so restart resumes safely.
+			checkpoint.RetryCount = prior.RetryCount
+		}
 	}
-	if persistErr := s.syncRepo.ApplyBatch(ctx, checkpoint, nil, nil, nil); persistErr != nil {
-		return Result{}, fmt.Errorf("sync failed: %v (record failure: %w)", syncErr, persistErr)
+	// Always write through a bounded non-cancelled context so a hard process
+	// interruption does not leave the durable checkpoint falsely running.
+	persistCtx, cancelPersist := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancelPersist()
+	if persistErr := s.syncRepo.ApplyBatch(persistCtx, checkpoint, nil, nil, nil); persistErr != nil {
+		return Result{}, fmt.Errorf("sync %s: %v (record result: %w)", status, syncErr, persistErr)
 	}
 	return Result{BackendID: backendID, Checkpoint: checkpoint}, syncErr
 }
@@ -206,6 +225,59 @@ func (s *Service) end(backendID int) {
 	s.mu.Lock()
 	delete(s.running, backendID)
 	s.mu.Unlock()
+}
+
+// ReconcileStaleRuns restores any checkpoint left in the running state by a
+// prior process interruption. A running checkpoint means a cycle was in
+// flight and no process claims it on startup, so the state is stale.
+//
+// The reconciliation writes the prior successful cursor as the new checkpoint
+// with status interrupted (never advanced past a cursor during a crashed
+// cycle), so a subsequent cycle resumes from the last known-good position and,
+// together with the durable operation-key ledger, never repeats a provider
+// mutation. The recovery write uses a bounded non-cancelled context so it
+// cannot itself be interrupted. Callers should invoke this once after startup
+// and before accepting manual runs.
+func (s *Service) ReconcileStaleRuns(ctx context.Context) ([]int, error) {
+	backends, err := s.backendRepo.ListAll()
+	if err != nil {
+		return nil, err
+	}
+	var reconciled []int
+	for _, backend := range backends {
+		if backend.Type != models.BackendTypeExternalCalDAV {
+			continue
+		}
+		prior, err := s.syncRepo.GetCheckpoint(backend.ID)
+		if err != nil || prior == nil || prior.Status != "running" {
+			continue
+		}
+		// Reconcile this backend's stale running checkpoint.
+		if err := s.reconcileStaleRun(ctx, backend.ID, prior); err != nil {
+			return reconciled, fmt.Errorf("reconcile backend %d: %w", backend.ID, err)
+		}
+		reconciled = append(reconciled, backend.ID)
+		log.Printf("Reconciled stale running sync for backend %d: preserved cursor %q, status -> interrupted",
+			backend.ID, prior.Cursor)
+	}
+	return reconciled, nil
+}
+
+// reconcileStaleRun commits one checkpoint that was running when the previous
+// process terminated. Cursor is preserved (it is the last cursor committed by
+// a completed cycle) and status becomes interrupted.
+func (s *Service) reconcileStaleRun(ctx context.Context, backendID int, prior *db.SyncCheckpoint) error {
+	now := time.Now().UTC()
+	cp := *prior
+	cp.Status = "interrupted"
+	cp.LastError = "sync was interrupted; stale running checkpoint reconciled on startup"
+	cp.UpdatedAt = now
+	persistCtx, cancelPersist := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancelPersist()
+	if err := s.syncRepo.ApplyBatch(persistCtx, cp, nil, nil, nil); err != nil {
+		return fmt.Errorf("persist reconciliation: %w", err)
+	}
+	return nil
 }
 
 // StartScheduler starts a periodic all-backend worker. A non-positive interval

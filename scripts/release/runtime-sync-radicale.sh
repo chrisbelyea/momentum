@@ -274,6 +274,25 @@ CURSOR_AFTER="$(json_field cursor <"${STATUS_AFTER}")" || die 'sync checkpoint w
 pass 'reloaded the durable sync checkpoint after a release-binary restart'
 run_sync "${TEMP_DIR}/sync-after-restart.json"
 
+# Simulate a hard process interruption by forcibly marking the checkpoint
+# as "running" (as if a cycle was in flight when the process was killed).
+# Then restart the server and verify startup reconciliation preserves the
+# prior cursor and resolves the stale running state.
+sqlite3 "${DB_PATH}" "UPDATE sync_checkpoints SET status='running' WHERE backend_id=${BACKEND_ID};" || die "failed to inject stale running checkpoint"
+stop_momentum
+start_momentum
+STATUS_RECONCILED="${TEMP_DIR}/status-reconciled.json"
+assert_http 200 "${STATUS_RECONCILED}" -b "${COOKIE_JAR}" "${MOMENTUM_BASE}/api/sync/status?backend_id=${BACKEND_ID}"
+RECONCILED_STATUS="$(json_field status <"${STATUS_RECONCILED}")" || die 'reconciled checkpoint had no status'
+[[ "${RECONCILED_STATUS}" != "running" ]] || die 'stale checkpoint was still running after restart'
+[[ "${RECONCILED_STATUS}" == "interrupted" ]] || die "stale checkpoint status was ${RECONCILED_STATUS}, expected interrupted"
+RECONCILED_CURSOR="$(json_field cursor <"${STATUS_RECONCILED}")" || die 'reconciled checkpoint had no cursor'
+[[ "${RECONCILED_CURSOR}" == "${CURSOR_AFTER}" ]] || die 'cursor changed during interruption recovery'
+pass 'reconciled stale running checkpoint to interrupted and preserved the prior cursor'
+
+# Now resume and verify a full sync completes successfully from the preserved cursor.
+run_sync "${TEMP_DIR}/sync-after-reconciliation.json"
+
 # Create a controlled two-sided edit. The local and remote updates happen
 # after the same checkpoint, so the runtime must retain a conflict instead of
 # silently choosing one side.
