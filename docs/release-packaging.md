@@ -245,8 +245,11 @@ separately. `--activate` requires `systemctl` and fails if activation cannot
 be completed. Set `MOMENTUM_SERVICE_NAME` to install an isolated unit name
 (ending in `.service`) when running a second instance. The service unit is
 sandboxed, restarts on failure, and writes only to the Momentum data
-directory. Enable lingering with `loginctl enable-linger` only if the service
-must run while the user is logged out.
+directory. Reinstalling retains the existing `momentum.env` configuration,
+database, encryption key, and development certificates; edit `momentum.env`
+deliberately to change settings on an existing installation. Enable lingering
+with `loginctl enable-linger` only if the service must run while the user is
+logged out.
 
 To remove the executable and unit while retaining the database and key for a
 future reinstall:
@@ -262,7 +265,8 @@ The archive's native packaging helpers are checked by
 `scripts/packaging/validate.sh`. Linux CI runs both the isolated launcher test
 and a real lingering user-systemd job that verifies activation, HTTPS health,
 authenticated task create/update/read/delete, restart persistence, an
-install-only upgrade, and uninstall with data retention. The tagged release
+install-only upgrade preserving configuration, key, certificates and database
+state, and uninstall with data retention. The tagged release
 smoke job repeats that systemd lifecycle against the extracted release binary.
 
 #### Windows launcher and service

@@ -89,12 +89,16 @@ quote_env_value() {
 	printf '"%s"' "${value}"
 }
 
-{
-	printf 'DB_PATH=%s\n' "$(quote_env_value "${DATA_DIR}/momentum.db")"
-	printf 'PORT=%s\n' "$(quote_env_value "${PORT:-8443}")"
-	printf 'MOMENTUM_ENCRYPTION_KEY=%s\n' "$(quote_env_value "${MOMENTUM_ENCRYPTION_KEY}")"
-	printf 'MOMENTUM_DEV_CERT_DIR=%s\n' "$(quote_env_value "${DATA_DIR}/dev-certs")"
-} >"${ENV_FILE}"
+# The generated file is user configuration. Regenerating it on upgrade would
+# discard custom settings (including an externally configured TLS path).
+if [[ ! -e "${ENV_FILE}" ]]; then
+	{
+		printf 'DB_PATH=%s\n' "$(quote_env_value "${DATA_DIR}/momentum.db")"
+		printf 'PORT=%s\n' "$(quote_env_value "${PORT:-8443}")"
+		printf 'MOMENTUM_ENCRYPTION_KEY=%s\n' "$(quote_env_value "${MOMENTUM_ENCRYPTION_KEY}")"
+		printf 'MOMENTUM_DEV_CERT_DIR=%s\n' "$(quote_env_value "${DATA_DIR}/dev-certs")"
+	} >"${ENV_FILE}"
+fi
 chmod 600 "${ENV_FILE}"
 
 escape_unit_path() {

@@ -130,13 +130,36 @@ LIST_RESPONSE="$(curl -kfsS -b "${COOKIE_JAR}" "${BASE_URL}/caldav/tasks?backend
 echo '==> Verifying install-only upgrade and clean uninstall'
 systemctl --user stop "${SERVICE_NAME}"
 ! systemctl --user is-active --quiet "${SERVICE_NAME}"
+[[ -s "${DATA_DIR}/dev-certs/dev-cert.pem" && -s "${DATA_DIR}/dev-certs/dev-key.pem" ]] || {
+  echo 'first run did not create TLS certificates' >&2
+  exit 1
+}
+# A user may add settings to the generated environment file. An upgrade must
+# retain them along with the database, encryption material, and certificates.
+printf 'MOMENTUM_TEST_CONFIG=retained\n' >>"${DATA_DIR}/momentum.env"
+cp -a "${DATA_DIR}/momentum.env" "${TEST_ROOT}/config.before"
+cp -a "${DATA_DIR}/encryption.key" "${TEST_ROOT}/key.before"
+cp -a "${DATA_DIR}/dev-certs/dev-cert.pem" "${TEST_ROOT}/cert.before"
+cp -a "${DATA_DIR}/dev-certs/dev-key.pem" "${TEST_ROOT}/cert-key.before"
 "${SCRIPT_DIR}/install-user.sh" --install-only "${BINARY}"
 [[ -f "${DATA_DIR}/momentum.db" && -s "${DATA_DIR}/encryption.key" ]] || {
   echo 'install-only upgrade did not preserve data' >&2
   exit 1
 }
+for entry in 'momentum.env config' 'encryption.key key' 'dev-certs/dev-cert.pem cert' 'dev-certs/dev-key.pem cert-key'; do
+  read -r path snapshot <<<"${entry}"
+  cmp -s "${DATA_DIR}/${path}" "${TEST_ROOT}/${snapshot}.before" || {
+    echo "install-only upgrade changed ${path}" >&2
+    exit 1
+  }
+done
 "${SCRIPT_DIR}/install-user.sh" --activate "${BINARY}"
 wait_for_health
+UPGRADED_BACKENDS="$(curl -kfsS -b "${COOKIE_JAR}" "${BASE_URL}/backends")"
+[[ "$(first_backend_id "${UPGRADED_BACKENDS}")" == "${BACKEND_ID}" ]] || {
+  echo 'authenticated database state did not survive upgrade' >&2
+  exit 1
+}
 "${SCRIPT_DIR}/uninstall-user.sh"
 [[ ! -e "${SERVICE_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/systemd/user}/${SERVICE_NAME}" ]] || {
   echo 'uninstall left service unit behind' >&2
@@ -144,5 +167,10 @@ wait_for_health
 }
 [[ ! -e "${INSTALL_DIR}/momentum-server" ]] || { echo 'uninstall left binary behind' >&2; exit 1; }
 [[ -f "${DATA_DIR}/momentum.db" ]] || { echo 'uninstall unexpectedly removed data' >&2; exit 1; }
+[[ -f "${DATA_DIR}/momentum.env" && -s "${DATA_DIR}/encryption.key" &&
+   -s "${DATA_DIR}/dev-certs/dev-cert.pem" ]] || {
+  echo 'uninstall unexpectedly removed configuration, encryption material, or certificates' >&2
+  exit 1
+}
 
 echo 'Linux systemd user-service lifecycle passed: install, health, auth/task CRUD, restart persistence, upgrade, and uninstall.'
