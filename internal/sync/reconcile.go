@@ -192,7 +192,7 @@ func Plan(input ReconcileInput) (PlanResult, error) {
 		}
 	}
 
-	if !input.Pull.HasMore && !input.Pull.Incremental {
+	if !input.Pull.HasMore {
 		ids := make([]int, 0, len(localByID))
 		for id := range localByID {
 			ids = append(ids, id)
@@ -209,6 +209,13 @@ func Plan(input ReconcileInput) (PlanResult, error) {
 			}
 			if mapping == nil {
 				actions = append(actions, ReconcileAction{Kind: ActionPush, Task: task, Reason: "local task has never been synced"})
+				continue
+			}
+			// Incremental reports omit unchanged remote entities. A local task
+			// with no durable mapping is still known to be unsynced, however,
+			// so it must be pushed on the next bounded cycle. Only mapped tasks
+			// are protected from missing-entity deletion below.
+			if input.Pull.Incremental {
 				continue
 			}
 			if _, present := remoteByUID[mapping.RemoteUID]; present {

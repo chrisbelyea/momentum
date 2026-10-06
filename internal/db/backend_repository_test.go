@@ -31,6 +31,40 @@ func setupBackendTestDB(t *testing.T) *sql.DB {
 	return database
 }
 
+func TestBackendRepository_ListAllWithSingleConnection(t *testing.T) {
+	database := setupBackendTestDB(t)
+	defer database.Close()
+	repo := NewBackendRepository(database)
+	// InitializeSchema seeds backend 1; Create assigns new IDs rather than
+	// using caller-supplied IDs. Exercise enumeration of both seeded and new rows.
+	created := []*models.Backend{
+		{UserID: 1, Type: models.BackendTypeInternal, Name: "Internal"},
+		{UserID: 1, Type: models.BackendTypeExternalCalDAV, Name: "External", Config: &models.BackendConfig{URL: "https://caldav.example.com/dav", Username: "test", Password: "test-only"}},
+	}
+	for _, backend := range created {
+		if err := repo.Create(backend); err != nil {
+			t.Fatalf("create backend %q: %v", backend.Name, err)
+		}
+	}
+	// InitializeSchema set MaxOpenConns(1); a nested Get while the ID query
+	// still holds that connection used to hang server startup indefinitely.
+	backends, err := repo.ListAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(backends) != 3 {
+		t.Fatalf("ListAll returned %d backends, want 3", len(backends))
+	}
+	if backends[0].ID != 1 || backends[0].Name != "Local tasks" ||
+		backends[1].ID != created[0].ID || backends[1].Name != created[0].Name ||
+		backends[2].ID != created[1].ID || backends[2].Name != created[1].Name ||
+		backends[2].Config == nil || backends[2].Config.URL != created[1].Config.URL {
+		t.Fatalf("ListAll returned unexpected backends: %d/%q, %d/%q, %d/%q (external config present: %t)",
+			backends[0].ID, backends[0].Name, backends[1].ID, backends[1].Name,
+			backends[2].ID, backends[2].Name, backends[2].Config != nil)
+	}
+}
+
 func TestBackendRepository_Create(t *testing.T) {
 	db := setupBackendTestDB(t)
 	defer db.Close()

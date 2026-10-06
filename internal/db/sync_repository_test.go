@@ -8,8 +8,56 @@ import (
 	"time"
 
 	"github.com/chrisbelyea/momentum/internal/models"
+	syncengine "github.com/chrisbelyea/momentum/internal/sync"
 	_ "github.com/mattn/go-sqlite3"
 )
+
+func TestSyncRepositoryOperationKeysSurviveRunnerRestart(t *testing.T) {
+	database, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	if err := InitializeSchema(database); err != nil {
+		t.Fatal(err)
+	}
+	repo := NewSyncRepository(database)
+	key := "backend/1/push/task-1/0"
+	attempts := 0
+	runner := syncengine.Runner{Policy: syncengine.RetryPolicy{MaxAttempts: 1, Multiplier: 2}, Store: repo}
+	if err := runner.Run(context.Background(), syncengine.SyncOperation{BackendID: 1, Operation: "push", Key: key, Run: func(context.Context) error {
+		attempts++
+		return nil
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	// A fresh repository/runner represents a process restarted after the
+	// provider accepted the mutation and the completion marker was committed.
+	restarted := syncengine.Runner{Policy: syncengine.RetryPolicy{MaxAttempts: 1, Multiplier: 2}, Store: NewSyncRepository(database)}
+	if err := restarted.Run(context.Background(), syncengine.SyncOperation{BackendID: 1, Operation: "push", Key: key, Run: func(context.Context) error {
+		attempts++
+		return nil
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 1 {
+		t.Fatalf("completed provider operation was replayed after restart: attempts=%d", attempts)
+	}
+	completed, err := repo.Completed(context.Background(), key)
+	if err != nil || !completed {
+		t.Fatalf("completion marker missing: completed=%v err=%v", completed, err)
+	}
+	if err := repo.MarkCompleted(context.Background(), key); err != nil {
+		t.Fatal(err)
+	}
+	var rows int
+	if err := database.QueryRow("SELECT count(*) FROM sync_operation_keys WHERE operation_key=?", key).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 1 {
+		t.Fatalf("completion marker is not idempotent: rows=%d", rows)
+	}
+}
 
 func TestSyncRepositoryApplyBatchIsTransactionalAndResumable(t *testing.T) {
 	database, err := sql.Open("sqlite3", ":memory:")

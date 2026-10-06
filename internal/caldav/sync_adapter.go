@@ -86,6 +86,28 @@ func (a *SyncAdapter) Push(ctx context.Context, entity syncengine.RemoteEntity) 
 	return syncengine.PushResult{RemoteUID: todo.UID, RemoteHref: remote.Href, ETag: remote.ETag}, nil
 }
 
+// ResumePush recovers the provider result for a completed PUT after the
+// caller lost the response before its SQLite transaction committed. This is
+// used by the durable sync idempotency store on process restart.
+func (a *SyncAdapter) ResumePush(ctx context.Context, entity syncengine.RemoteEntity) (syncengine.PushResult, error) {
+	href := entity.RemoteHref
+	if href == "" {
+		var err error
+		href, err = a.client.todoHref(a.collection, entity.Task.UID)
+		if err != nil {
+			return syncengine.PushResult{}, err
+		}
+	}
+	remote, err := a.client.GetTodo(ctx, href)
+	if err != nil {
+		return syncengine.PushResult{}, err
+	}
+	if remote.Todo == nil || remote.Todo.UID != entity.Task.UID {
+		return syncengine.PushResult{}, fmt.Errorf("completed CalDAV push returned unexpected UID")
+	}
+	return syncengine.PushResult{RemoteUID: remote.Todo.UID, RemoteHref: remote.Href, ETag: remote.ETag}, nil
+}
+
 func (a *SyncAdapter) Delete(ctx context.Context, entity syncengine.RemoteEntity) error {
 	if entity.RemoteHref == "" {
 		return fmt.Errorf("cannot delete CalDAV entity without href")

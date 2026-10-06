@@ -14,6 +14,7 @@ type cycleAdapter struct {
 	pushes     []RemoteEntity
 	deletes    []RemoteEntity
 	pushErrors int
+	resumes    []RemoteEntity
 }
 
 func (a *cycleAdapter) Capabilities() Capabilities {
@@ -31,6 +32,10 @@ func (a *cycleAdapter) Push(_ context.Context, entity RemoteEntity) (PushResult,
 func (a *cycleAdapter) Delete(_ context.Context, entity RemoteEntity) error {
 	a.deletes = append(a.deletes, entity)
 	return nil
+}
+func (a *cycleAdapter) ResumePush(_ context.Context, entity RemoteEntity) (PushResult, error) {
+	a.resumes = append(a.resumes, entity)
+	return PushResult{RemoteUID: entity.RemoteUID, RemoteHref: "/tasks/" + entity.RemoteUID, ETag: "resumed-etag"}, nil
 }
 
 func TestRunCycleExecutesPushAndAppliesRemoteChanges(t *testing.T) {
@@ -54,6 +59,32 @@ func TestRunCycleExecutesPushAndAppliesRemoteChanges(t *testing.T) {
 	}
 }
 
+func TestRunCycleCorrelatesPushResultForUnsyncedLocalTask(t *testing.T) {
+	local := &models.Task{ID: 1, BackendID: 9, UID: "local-new", Title: "new", UpdatedAt: ptrTime(timeNow())}
+	adapter := &cycleAdapter{pull: PullResult{NextCursor: "next"}}
+	policy := RetryPolicy{MaxAttempts: 1, InitialWait: time.Nanosecond, MaxWait: time.Nanosecond, Multiplier: 2}
+	var pushed *PushResult
+	_, err := RunCycle(context.Background(), adapter, Runner{Policy: policy}, CycleInput{
+		BackendID: 9,
+		Local:     []*models.Task{local},
+	}, func(_ context.Context, action ReconcileAction, result *PushResult) error {
+		if action.Kind != ActionPush {
+			t.Fatalf("expected unsynced task to be pushed, got %s", action.Kind)
+		}
+		pushed = result
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pushed == nil || pushed.RemoteUID != local.UID {
+		t.Fatalf("push result was not correlated with local UID: %#v", pushed)
+	}
+	if len(adapter.pushes) != 1 || adapter.pushes[0].RemoteUID != local.UID {
+		t.Fatalf("adapter received unexpected remote identity: %#v", adapter.pushes)
+	}
+}
+
 func TestRunCycleRetriesPushAndNeverDeletesFromPartialPull(t *testing.T) {
 	local := &models.Task{ID: 1, BackendID: 8, UID: "local", Title: "new", UpdatedAt: ptrTime(timeNow())}
 	adapter := &cycleAdapter{pull: PullResult{HasMore: true, Entities: []RemoteEntity{{RemoteUID: "local", Task: models.Task{BackendID: 8, UID: "local", Title: "old"}, ETag: "same"}}}, pushErrors: 1}
@@ -65,6 +96,42 @@ func TestRunCycleRetriesPushAndNeverDeletesFromPartialPull(t *testing.T) {
 	}
 	if len(adapter.pushes) != 2 || result.RemoteDeletes != 0 {
 		t.Fatalf("unexpected retry/deletion behavior: pushes=%d deletes=%d", len(adapter.pushes), result.RemoteDeletes)
+	}
+}
+
+func TestRunCycleResumesCompletedPushWithProviderResult(t *testing.T) {
+	local := &models.Task{ID: 1, BackendID: 11, UID: "completed-push", Title: "new", UpdatedAt: ptrTime(timeNow())}
+	adapter := &cycleAdapter{pull: PullResult{NextCursor: "next"}}
+	key := pushOperationKey(11, RemoteEntity{Task: *local, RemoteUID: local.UID}, 0)
+	store := &memoryIdempotencyStore{completed: map[string]bool{key: true}}
+	var pushed *PushResult
+	_, err := RunCycle(context.Background(), adapter, Runner{Policy: RetryPolicy{MaxAttempts: 1, Multiplier: 2}, Store: store}, CycleInput{BackendID: 11, Local: []*models.Task{local}}, func(_ context.Context, action ReconcileAction, result *PushResult) error {
+		if action.Kind != ActionPush {
+			t.Fatalf("expected push action, got %s", action.Kind)
+		}
+		pushed = result
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(adapter.pushes) != 0 || len(adapter.resumes) != 1 || pushed == nil || pushed.ETag != "resumed-etag" {
+		t.Fatalf("completed push was not resumed safely: pushes=%d resumes=%d result=%#v", len(adapter.pushes), len(adapter.resumes), pushed)
+	}
+}
+
+func TestRunCycleUsesNewPushKeyAfterTaskEdit(t *testing.T) {
+	local := &models.Task{ID: 1, BackendID: 12, UID: "edited-task", Title: "new title", UpdatedAt: ptrTime(timeNow())}
+	old := *local
+	old.Title = "old title"
+	adapter := &cycleAdapter{pull: PullResult{NextCursor: "next"}}
+	oldKey := pushOperationKey(12, RemoteEntity{Task: old, RemoteUID: old.UID}, 0)
+	store := &memoryIdempotencyStore{completed: map[string]bool{oldKey: true}}
+	if _, err := RunCycle(context.Background(), adapter, Runner{Policy: RetryPolicy{MaxAttempts: 1, Multiplier: 2}, Store: store}, CycleInput{BackendID: 12, Local: []*models.Task{local}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(adapter.pushes) != 1 || len(adapter.resumes) != 0 {
+		t.Fatalf("task edit reused completed operation key: pushes=%d resumes=%d", len(adapter.pushes), len(adapter.resumes))
 	}
 }
 

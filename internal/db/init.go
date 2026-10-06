@@ -25,7 +25,10 @@ var syncSchemaSQL string
 //go:embed schema/changelog/005-vtodo-date-only.sql
 var dateOnlySchemaSQL string
 
-const schemaVersion = 5
+//go:embed schema/changelog/006-sync-operation-keys.sql
+var operationKeySchemaSQL string
+
+const schemaVersion = 6
 
 // InitializeSchema creates a fresh database or upgrades an older shipped
 // shape. The migration ledger prevents a partial schema from being treated as
@@ -58,6 +61,9 @@ func InitializeSchema(database *sql.DB) error {
 	}
 	if _, err := database.Exec(syncSchemaSQL); err != nil {
 		return fmt.Errorf("apply synchronization schema: %w", err)
+	}
+	if _, err := database.Exec(operationKeySchemaSQL); err != nil {
+		return fmt.Errorf("apply synchronization operation-key schema: %w", err)
 	}
 	if err := applyDateOnlySchema(database); err != nil {
 		return fmt.Errorf("apply date-only schema: %w", err)

@@ -89,6 +89,21 @@ func TestPlanResolvesIncrementalDeletionByDurableHref(t *testing.T) {
 	}
 }
 
+func TestPlanPushesUnmappedLocalTaskDuringIncrementalPull(t *testing.T) {
+	task := &models.Task{ID: 1, BackendID: 6, UID: "local-only", Title: "new", UpdatedAt: ptrTime(time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC))}
+	result, err := Plan(ReconcileInput{
+		BackendID: 6,
+		Local:     []*models.Task{task},
+		Pull:      PullResult{NextCursor: "cursor-2", Incremental: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Actions) != 1 || result.Actions[0].Kind != ActionPush || result.Actions[0].Task != task {
+		t.Fatalf("incremental pull did not push unmapped local task: %#v", result.Actions)
+	}
+}
+
 func TestPlanRejectsDuplicateRemoteUID(t *testing.T) {
 	_, err := Plan(ReconcileInput{BackendID: 1, Pull: PullResult{Entities: []RemoteEntity{{RemoteUID: "same"}, {RemoteUID: "same"}}}})
 	if err == nil {

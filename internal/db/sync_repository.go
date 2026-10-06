@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/chrisbelyea/momentum/internal/models"
@@ -13,15 +15,15 @@ import (
 
 // SyncCheckpoint is the durable cursor and retry state for one backend.
 type SyncCheckpoint struct {
-	BackendID       int
-	Cursor          string
-	Status          string
-	LastStartedAt   *time.Time
-	LastCompletedAt *time.Time
-	LastError       string
-	RetryCount      int
-	NextRetryAt     *time.Time
-	UpdatedAt       time.Time
+	BackendID       int        `json:"backend_id"`
+	Cursor          string     `json:"cursor,omitempty"`
+	Status          string     `json:"status"`
+	LastStartedAt   *time.Time `json:"last_started_at,omitempty"`
+	LastCompletedAt *time.Time `json:"last_completed_at,omitempty"`
+	LastError       string     `json:"last_error,omitempty"`
+	RetryCount      int        `json:"retry_count"`
+	NextRetryAt     *time.Time `json:"next_retry_at,omitempty"`
+	UpdatedAt       time.Time  `json:"updated_at,omitempty"`
 }
 
 // SyncEntity maps a canonical task to a provider entity. TaskID is nil while
@@ -89,6 +91,68 @@ type SyncConflict struct {
 type SyncRepository struct{ db *sql.DB }
 
 func NewSyncRepository(db *sql.DB) *SyncRepository { return &SyncRepository{db: db} }
+
+// Completed reports whether a provider operation was durably completed. The
+// operation key is intentionally the same stable identity used by the sync
+// runner, so a process restart can avoid repeating a provider mutation.
+func (r *SyncRepository) Completed(ctx context.Context, key string) (bool, error) {
+	backendID, err := backendIDFromOperationKey(key)
+	if err != nil {
+		return false, err
+	}
+	var completed int
+	err = r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sync_operation_keys WHERE operation_key=? AND backend_id=?)`, key, backendID).Scan(&completed)
+	if err != nil {
+		return false, fmt.Errorf("check completed sync operation %q: %w", key, err)
+	}
+	return completed == 1, nil
+}
+
+// MarkCompleted durably records a provider operation. INSERT OR IGNORE makes
+// retries and duplicate completion notifications harmless.
+func (r *SyncRepository) MarkCompleted(ctx context.Context, key string) error {
+	backendID, err := backendIDFromOperationKey(key)
+	if err != nil {
+		return err
+	}
+	if _, err := r.db.ExecContext(ctx, `INSERT OR IGNORE INTO sync_operation_keys(operation_key,backend_id) VALUES(?,?)`, key, backendID); err != nil {
+		return fmt.Errorf("mark sync operation %q complete: %w", key, err)
+	}
+	return nil
+}
+
+func backendIDFromOperationKey(key string) (int, error) {
+	parts := strings.SplitN(key, "/", 3)
+	if len(parts) < 2 || parts[0] != "backend" {
+		return 0, fmt.Errorf("sync operation key %q does not identify a backend", key)
+	}
+	backendID, err := strconv.Atoi(parts[1])
+	if err != nil || backendID <= 0 {
+		return 0, fmt.Errorf("sync operation key %q has an invalid backend ID", key)
+	}
+	return backendID, nil
+}
+
+// RecordOperation appends one provider attempt without advancing the
+// checkpoint. Runtime observers use this for durable attempt/outcome history;
+// the checkpoint and reconciliation rows are still committed atomically by
+// ApplyBatch after a complete cycle.
+func (r *SyncRepository) RecordOperation(ctx context.Context, operation SyncOperation) error {
+	if operation.BackendID <= 0 || strings.TrimSpace(operation.Operation) == "" {
+		return fmt.Errorf("invalid sync operation")
+	}
+	if strings.TrimSpace(operation.Direction) == "" {
+		operation.Direction = operation.Operation
+	}
+	if strings.TrimSpace(operation.Outcome) == "" {
+		operation.Outcome = "failure"
+	}
+	_, err := r.db.ExecContext(ctx, `INSERT INTO sync_operations(backend_id,entity_id,direction,operation,outcome,error,attempts,next_attempt_at,completed_at) VALUES(?,?,?,?,?,?,?,?,?)`, operation.BackendID, operation.EntityID, operation.Direction, operation.Operation, operation.Outcome, operation.Error, operation.Attempts, operation.NextAttemptAt, operation.CompletedAt)
+	if err != nil {
+		return fmt.Errorf("record sync operation: %w", err)
+	}
+	return nil
+}
 
 // ListConflicts returns retained conflict evidence for backends owned by a
 // user. An empty status lists every conflict; callers normally request
