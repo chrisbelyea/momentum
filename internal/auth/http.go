@@ -60,6 +60,17 @@ func SameOrigin(r *http.Request) bool {
 	return origin == "" || origin == "https://"+r.Host || origin == "http://"+r.Host
 }
 
+// BrowserFormSameOrigin requires a matching Origin on rendered form mutations.
+// Unlike JSON API clients, forms cannot safely omit Origin: an attacker can
+// submit an originless cross-site form without reading the response.
+func BrowserFormSameOrigin(r *http.Request) bool {
+	scheme := "http://"
+	if r.TLS != nil {
+		scheme = "https://"
+	}
+	return r.Header.Get("Origin") == scheme+r.Host
+}
+
 // SafeReturnURL returns only an in-origin relative request target.
 func SafeReturnURL(raw string) string {
 	if raw == "" {

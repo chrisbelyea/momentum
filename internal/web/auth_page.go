@@ -53,7 +53,7 @@ func (h *AuthPageHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !auth.SameOrigin(r) {
+	if !auth.BrowserFormSameOrigin(r) {
 		http.Error(w, "cross-site request rejected", http.StatusForbidden)
 		return
 	}
@@ -89,7 +89,7 @@ func (h *AuthPageHandler) HandleRegister(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !auth.SameOrigin(r) {
+	if !auth.BrowserFormSameOrigin(r) {
 		http.Error(w, "cross-site request rejected", http.StatusForbidden)
 		return
 	}
@@ -122,7 +122,7 @@ func (h *AuthPageHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !auth.SameOrigin(r) {
+	if !auth.BrowserFormSameOrigin(r) {
 		http.Error(w, "cross-site request rejected", http.StatusForbidden)
 		return
 	}

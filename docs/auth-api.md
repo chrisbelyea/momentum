@@ -3,7 +3,13 @@
 Momentum uses one local identity per self-hosted instance in Phase 1. Passwords
 are hashed with Argon2id; clients never receive a password or session token in a
 JSON response. The server must run over HTTPS in production. Browser mutations
-must include a same-origin `Origin` (or omit it for a non-browser client).
+must include a same-origin `Origin` (or omit it for a non-browser JSON client).
+Rendered `/register`, `/login`, and `/logout` form posts require an `Origin`
+matching the request's scheme and host; missing, cross-scheme, and cross-site
+origins return `403` before credentials or session state are changed. Browsers
+that suppress the `Origin` header cannot submit these forms; use a browser that
+sends it rather than weakening the form protection. JSON endpoints retain their
+originless non-browser compatibility behavior.
 
 ## First account
 
