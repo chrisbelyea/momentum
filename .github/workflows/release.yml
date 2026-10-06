@@ -8,6 +8,16 @@ permissions:
   contents: write
 
 jobs:
+  pwa-validation:
+    name: Validate distributable PWA archive
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the distributable PWA archive
+        run: scripts/release/build-pwa.sh
+      - name: Validate source assets and exact archive contents
+        run: scripts/release/validate-pwa.sh dist/web.tar.gz
+
   goreleaser:
     name: Build release artifacts (draft)
     runs-on: ubuntu-latest
@@ -204,7 +214,7 @@ jobs:
 
   publish:
     name: Publish release
-    needs: [integration-test, verify-arm64-artifact]
+    needs: [integration-test, verify-arm64-artifact, pwa-validation]
     runs-on: ubuntu-latest
     steps:
       - name: Publish only after all validation

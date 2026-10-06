@@ -1,18 +1,32 @@
 # Progressive Web App scope
 
-Phase 1 supports online use of the authenticated Momentum web UI. The manifest
-is served by the release binary and includes branded 192px and 512px icons.
-Repository and release-binary checks verify the manifest, icons, and
-same-origin static-asset service worker. Browser installability is not claimed
-without browser-level verification. Task data is never cached by a service
-worker, and offline mutation is intentionally deferred until a conflict-safe
-queue exists.
+Momentum’s Phase 1 PWA is an installable, online-first web client for Windows
+and Linux desktop users running a current Chromium-based browser. Production
+installations must use HTTPS with a certificate trusted by the browser;
+`https://localhost` is also a secure context for local development. The
+release binary serves the manifest, branded 192px and 512px icons, and a
+root-scoped service worker. Chromium browser CI runs on both Ubuntu and
+Windows and verifies those installability prerequisites, worker activation and
+update registration, authenticated-session behavior, and the offline cache
+boundary.
 
-Supported browsers are current Chromium, Firefox, and Safari releases on
-Windows, Linux, and macOS. A user must reconnect before creating, editing,
-deleting, or changing task status. This avoids stale authenticated data and
-prevents offline writes from bypassing server-side authorization and ETag
-checks. Offline mutation, background sync, push notifications, and
-browser-installability automation remain deferred scope; [issue #70](https://github.com/chrisbelyea/momentum/issues/70)
-records the decision and implementation evidence. They must not be inferred
-from the current manifest alone.
+The offline behavior is deliberately read-only and privacy-preserving:
+
+- The worker caches only same-origin `/static/` assets (manifest and icons).
+- HTML pages, authenticated task/API responses, authentication endpoints,
+  CalDAV resources, and mutation requests are never cached.
+- When disconnected, the static shell assets remain available, but the
+  authenticated board cannot be loaded and task create/edit/delete/status
+  operations require reconnecting to the server.
+
+This prevents stale authenticated data and offline writes from bypassing
+server-side authorization and ETag checks. Offline task data, background
+sync, push notifications, and a conflict-safe mutation queue remain deferred
+to [issue #70](https://github.com/chrisbelyea/momentum/issues/70). The browser
+test proves the installability prerequisites and service-worker lifecycle; the
+browser’s OS install prompt itself remains user-agent UI and is not asserted
+by automation.
+
+Firefox and Safari remain supported for normal online web use, but this release
+does not claim their platform-specific PWA installation UX without equivalent
+browser validation.
