@@ -70,6 +70,7 @@ and verification gaps:
 | **Authentication** | Core registration/login/logout, session ownership, and the authenticated browser task workflow are implemented and covered by release/browser checks. |
 | **TLS** | TLS 1.3+ is enforced; development certificates are explicit and production encryption keys are required. |
 | **Web UI** | Board/list views, accessible create/edit/delete/status/backend controls, rich fields, browser E2E, and failure/concurrency reconciliation are implemented. |
+| **PWA (#150)** | [PR #164](https://github.com/chrisbelyea/momentum/pull/164) validates the Windows/Linux Chromium installability prerequisites, worker lifecycle, static-only offline cache boundary, and release archive; the OS install prompt itself is not automated. The issue remains open until reviewed and merged. See [PWA scope](pwa.md). |
 | **Sync** | Provider-neutral reconciliation cycles, retry/idempotency, RFC 6578 cursors, transactional local application, authenticated conflict listing/detail/recovery, per-backend concurrency/rate limits, structured operation events, and live interrupted-sync recovery are implemented and covered by green Radicale/Nextcloud CI. |
 | **External CalDAV** | Authenticated collection discovery, VTODO CRUD, REPORT lifecycle, a sync adapter, deterministic local compatibility profiles, and green Radicale 3.1.8 plus Nextcloud Tasks 0.17.1 provider-compatible checks are implemented; hosted-service certification remains explicitly out of scope. |
 | **VTODO wire format** | RFC 5545 parser/serializer, canonical persistence, date-only fidelity, provider extension preservation, and fixture coverage are implemented. The JSON/iCalendar boundary is documented in `docs/vtodo-api.md`. |
@@ -80,7 +81,7 @@ and verification gaps:
 
 ## Current tracked work (GitHub is authoritative)
 
-The Phase 1 recovery program [#61](https://github.com/chrisbelyea/momentum/issues/61) and its P1 children are closed with linked implementation and release evidence. The remaining open roadmap item is [#71 post-Phase-1 clients and integrations](https://github.com/chrisbelyea/momentum/issues/71), whose decisions and child issues are recorded in [docs/post-phase1-roadmap.md](post-phase1-roadmap.md). Completed child issues and platform work are recorded in GitHub, including #59, #62–#70, and #74–#78.
+The Phase 1 recovery program [#61](https://github.com/chrisbelyea/momentum/issues/61) and its P1 children are closed with linked implementation and release evidence. Open work includes [#150 PWA validation](https://github.com/chrisbelyea/momentum/issues/150) and [#71 post-Phase-1 clients and integrations](https://github.com/chrisbelyea/momentum/issues/71), whose decisions and child issues are recorded in [docs/post-phase1-roadmap.md](post-phase1-roadmap.md). Completed child issues and platform work are recorded in GitHub, including #59, #62–#70, and #74–#78.
 
 ---
 
