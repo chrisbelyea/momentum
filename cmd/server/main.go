@@ -165,6 +165,7 @@ func runServer(stop <-chan os.Signal) {
 	mux.Handle("/api/tasks/", authService.Require(http.HandlerFunc(webHandler.HandleTasks)))
 	mux.Handle("/api/sync/conflicts", authService.Require(http.HandlerFunc(webHandler.HandleSyncConflicts)))
 	mux.Handle("/api/sync/conflicts/", authService.Require(http.HandlerFunc(webHandler.HandleSyncConflicts)))
+	mux.Handle("/api/v1/", authService.Require(http.HandlerFunc(webHandler.HandleNativeAPI)))
 
 	// CalDAV routes
 	mux.Handle("/caldav/tasks", authService.Require(http.HandlerFunc(caldavHandler.HandleTasks)))

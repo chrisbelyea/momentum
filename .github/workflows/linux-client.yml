@@ -1,0 +1,21 @@
+name: Linux desktop client
+
+on:
+  pull_request:
+    paths:
+      - 'client/linux/**'
+      - 'internal/web/native_api*'
+      - 'cmd/server/main.go'
+      - '.github/workflows/linux-client.yml'
+  push:
+    branches: [feat/132-linux-client]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y valac meson ninja-build libgtk-4-dev libsoup-3.0-dev libjson-glib-dev libsecret-1-dev
+      - name: Compile Linux client
+        run: meson setup client/linux/build client/linux && meson compile -C client/linux/build
