@@ -55,7 +55,7 @@ namespace Momentum {
                 message.set_request_body_from_bytes ("application/json", new Bytes (body.data));
             }
             var bytes = http.send_and_read (message, null);
-            int code = message.status_code;
+            uint code = message.status_code;
             if (path == "/auth/login" && code == 200) {
                 string? header = message.response_headers.get_one ("Set-Cookie");
                 if (header == null || !header.has_prefix ("momentum_session="))
