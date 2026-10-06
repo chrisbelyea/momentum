@@ -31,6 +31,29 @@ func setupBackendTestDB(t *testing.T) *sql.DB {
 	return database
 }
 
+func TestBackendRepository_ListAllWithSingleConnection(t *testing.T) {
+	database := setupBackendTestDB(t)
+	defer database.Close()
+	repo := NewBackendRepository(database)
+	for _, backend := range []*models.Backend{
+		{ID: 1, UserID: 1, Type: models.BackendTypeInternal, Name: "Internal"},
+		{ID: 2, UserID: 1, Type: models.BackendTypeExternalCalDAV, Name: "External", Config: &models.BackendConfig{URL: "https://caldav.example.com/dav", Username: "test", Password: "test-only"}},
+	} {
+		if err := repo.Create(backend); err != nil {
+			t.Fatalf("create backend %d: %v", backend.ID, err)
+		}
+	}
+	// InitializeSchema set MaxOpenConns(1); a nested Get while the ID query
+	// still holds that connection used to hang server startup indefinitely.
+	backends, err := repo.ListAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(backends) != 2 || backends[0].ID != 1 || backends[1].ID != 2 || backends[1].Config == nil {
+		t.Fatalf("ListAll returned unexpected backends: %+v", backends)
+	}
+}
+
 func TestBackendRepository_Create(t *testing.T) {
 	db := setupBackendTestDB(t)
 	defer db.Close()

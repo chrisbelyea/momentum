@@ -92,12 +92,24 @@ func (r *BackendRepository) ListAll() ([]*models.Backend, error) {
 		return nil, fmt.Errorf("failed to query all backends: %w", err)
 	}
 	defer rows.Close()
-	var backends []*models.Backend
+	var ids []int
 	for rows.Next() {
 		var id int
 		if err := rows.Scan(&id); err != nil {
 			return nil, fmt.Errorf("failed to scan backend ID: %w", err)
 		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating backend IDs: %w", err)
+	}
+	// InitializeSchema limits SQLite to one connection. Release the cursor
+	// before Get performs another query or startup/scheduler will deadlock.
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close backend IDs: %w", err)
+	}
+	var backends []*models.Backend
+	for _, id := range ids {
 		backend, err := r.Get(id)
 		if err != nil {
 			return nil, err
@@ -105,9 +117,6 @@ func (r *BackendRepository) ListAll() ([]*models.Backend, error) {
 		if backend != nil {
 			backends = append(backends, backend)
 		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating backend IDs: %w", err)
 	}
 	return backends, nil
 }
