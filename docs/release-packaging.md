@@ -257,10 +257,19 @@ protects `%APPDATA%\Momentum\encryption.key` on first use unless
 default. To register an automatic Windows service, rerun from an elevated
 PowerShell prompt with
 `-RegisterService -EncryptionKey '<strong-random-key>'`; it refuses to replace
-an existing service implicitly. The installer stores the per-service database
-path, service name, and production encryption key in the SCM service
-environment. Never use `MOMENTUM_DEV_MODE=1` for a service exposed beyond local
-development.
+an existing service implicitly. Pass `-Port <port>` when the default HTTPS
+port 8443 is unavailable. Service mode defaults to the LocalSystem
+identity, `%ProgramFiles%\Momentum` for the executable, and
+`%ProgramData%\Momentum` for the database and development certificate. The
+installer grants that service identity the required access to those paths and
+stores the database path, service name, and production encryption key in the SCM
+service environment. If custom paths are supplied, the installer applies the
+same service ACLs. Never use `MOMENTUM_DEV_MODE=1` for a service exposed beyond
+local development.
+
+The packaged launcher checks are safe to run from installation and temporary
+directories whose Windows paths contain spaces; keep those paths intact when
+customizing `-InstallDirectory` or `-DataDirectory`.
 
 #### First run, upgrades, and backups
 
@@ -292,6 +301,8 @@ After=network.target
 ExecStart=/usr/local/bin/momentum-server
 Environment="DB_PATH=/var/lib/momentum/momentum.db"
 Environment="PORT=8443"
+# Optional: leave unset for loopback-only binding (127.0.0.1)
+# Environment="LISTEN_ADDR=10.0.0.20"
 Environment="MOMENTUM_ENCRYPTION_KEY=<your-key>"
 WorkingDirectory=/usr/local/share/momentum
 Restart=on-failure
@@ -314,6 +325,11 @@ Register the binary as a Windows service using [NSSM](https://nssm.cc/) or the b
 sc.exe create Momentum binPath= "C:\momentum\momentum-server.exe" start= auto
 sc.exe start Momentum
 ```
+
+Packaged launches bind HTTPS to loopback (`127.0.0.1`) by default. Set
+`LISTEN_ADDR` explicitly for a network-facing deployment only after installing
+a certificate valid for that host and applying firewall or reverse-proxy access
+controls.
 
 ---
 

@@ -40,7 +40,7 @@ warning — this is expected for auto-generated certificates).
 1. Start the server (it initializes or upgrades the canonical SQLite schema automatically):
 
 ```bash
-# Default: uses the OS user data directory, listens on https://localhost:8443
+# Default: uses the OS user data directory, listens on https://127.0.0.1:8443
 ./bin/momentum-server
 
 # Custom configuration via environment variables
@@ -66,6 +66,8 @@ The server is configured via environment variables:
 
 - `DB_PATH`: Path to SQLite database file (default: OS user data directory)
 - `PORT`: HTTPS server port (default: `8443`)
+- `LISTEN_ADDR`: HTTPS bind host (default: `127.0.0.1`; use a non-loopback
+  address only with a trusted certificate and appropriate firewall/reverse-proxy controls)
 - `TLS_CERT`: Path to TLS certificate PEM file (optional; auto-generated for development if not set)
 - `TLS_KEY`: Path to TLS private key PEM file (optional; auto-generated for development if not set)
 - `HTTP_REDIRECT_PORT`: If set, starts an HTTP server that redirects to HTTPS
