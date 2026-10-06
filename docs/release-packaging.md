@@ -26,20 +26,19 @@ Momentum uses [GoReleaser](https://goreleaser.com/) via a GitHub Actions workflo
 
 Visit the [Releases page](https://github.com/chrisbelyea/momentum/releases) and download the archive for your platform:
 
-| Platform | Archive |
-|----------|---------|
-| Linux x86-64 | `momentum-server-linux-amd64.tar.gz` |
-| Linux ARM64 | `momentum-server-linux-arm64.tar.gz` |
-| Windows x86-64 | `momentum-server-windows-amd64.zip` | `momentum-windows-amd64.msi` |
-| Linux x86-64 | `momentum-server-linux-amd64.tar.gz` | `momentum-linux-amd64.deb`, `momentum-linux-x86_64.rpm` |
-| Linux ARM64 | `momentum-server-linux-arm64.tar.gz` | `momentum-linux-arm64.deb`, `momentum-linux-aarch64.rpm` |
+| Platform | Portable archive | Future native package (#176) |
+|----------|------------------|------------------------------|
+| Linux x86-64 | `momentum-server-linux-amd64.tar.gz` | `momentum_X.Y.Z_amd64.deb`, `momentum-X.Y.Z-1.x86_64.rpm` |
+| Linux ARM64 | `momentum-server-linux-arm64.tar.gz` | `momentum_X.Y.Z_arm64.deb`, `momentum-X.Y.Z-1.aarch64.rpm` |
+| Windows x86-64 | `momentum-server-windows-amd64.zip` | `momentum-X.Y.Z-windows-amd64.msi` |
 | macOS Intel | `momentum-server-darwin-amd64.tar.gz` | — |
 | macOS Apple Silicon | `momentum-server-darwin-arm64.tar.gz` | — |
 
-Each release also includes a `checksums.txt` file containing SHA-256 checksums for all archives.
+Current v0.3.0 includes `checksums.txt` for the five archives only. The #176
+workflow proposes a complete manifest and Sigstore bundle for future releases.
 
 The current published release is the stable
-[`v0.2.2`](https://github.com/chrisbelyea/momentum/releases/tag/v0.2.2).
+[`v0.3.0`](https://github.com/chrisbelyea/momentum/releases/tag/v0.3.0).
 It contains Linux amd64/arm64, Windows amd64, and native macOS amd64/arm64
 archives. Release workflow run 34234487845 passed platform-appropriate health
 and packaged-launcher smoke plus complete fresh-database task workflows on all
@@ -391,46 +390,84 @@ unverified; see [the documented PWA scope](pwa.md).
 
 ---
 
-## Native Installer Packages (#176)
+## Native Installer Packages (#176, not yet released)
 
-Momentum publishes platform-native installers alongside the portable archives.
+These scripts are under review in [PR #177](https://github.com/chrisbelyea/momentum/pull/177).
+Published v0.3.0 has **no** MSI, DEB or RPM. Windows ARM64 is not currently a
+supported server build; Linux packages target amd64 and arm64.
 
-### Windows MSI
-- **Target:** Windows x86-64
-- **Features:** Service registration, silent/unattended install, upgrade preservation of DB/encryption/config/certs, uninstall without deleting user data by default
-- **Build:** `scripts/packaging/windows/build-msi.ps1`
-- **Install options:** UI installer or silent via `msiexec /i momentum.msi /qn`
-- **Service:** `Momentum` registered in Windows Service Control Manager
-- **Data:** `%ProgramData%\Momentum` for database and dev certificate; `%AppData%\Momentum` for per-user encryption key
+### Verify before installation
 
-### Linux DEB
-- **Targets:** x86-64, ARM64
-- **Features:** systemd user service, upgrade preservation, clean uninstall without data deletion
-- **Build:** `scripts/packaging/linux/build-deb.sh`
-- **Install:** `sudo apt install ./momentum_${version}_${arch}.deb`
-- **Service:** `momentum.service` (systemd user unit)
-- **Data:** `/var/lib/momentum` (preserved on upgrade/uninstall)
+For a future installer release download the package, `checksums.txt`, and
+`checksums.txt.sigstore.json` from the same release. Substitute its exact tag:
 
-### Linux RPM
-- **Targets:** x86-64, ARM64
-- **Features:** systemd service, upgrade preservation, clean uninstall
-- **Build:** `scripts/packaging/linux/build-rpm.sh`
-- **Install:** `sudo rpm -i momentum-${version}-${arch}.rpm`
-- **Service:** `momentum.service` (systemd)
-- **Data:** `/var/lib/momentum` (preserved on upgrade/uninstall)
+```bash
+cosign verify-blob checksums.txt --bundle checksums.txt.sigstore.json \
+  --certificate-identity 'https://github.com/chrisbelyea/momentum/.github/workflows/release.yml@refs/tags/vX.Y.Z' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
+sha256sum --check --ignore-missing checksums.txt
+```
 
-### Package Metadata
-Each native package declares supported architectures, dependencies, service ownership, and versioning. Checksums and signatures are published alongside archives in `checksums.txt`.
+On Windows use the same `cosign verify-blob` command in PowerShell, then
+compare `(Get-FileHash .\momentum-X.Y.Z-windows-amd64.msi -Algorithm SHA256).Hash`
+with its entry in the verified manifest. This keyless Sigstore signature
+covers the SHA-256 manifest, **not** an Authenticode publisher signature or
+native DEB/RPM signature. Windows may display Unknown Publisher/SmartScreen
+warnings. Do not disable Windows protections. Direct DEB/RPM downloads are
+not signed package-repository installations: verify the manifest and hash
+manually before installation. The owner-approved $0 integrity policy is tracked
+with #176; native signing remains deferred.
 
-### Upgrades and Rollback
-- Stop the service before upgrading (`systemctl --user stop momentum.service` or `Stop-Service Momentum`)
-- Backup the SQLite database while the server is stopped
-- Runtime migrations are applied on startup
-- Keep a copy of the previous binary until the upgraded server passes its health and task-workflow checks
-- Rollback: reinstall the previous package version
+### Linux DEB and RPM
 
-### Verification and Signatures
-Packages include checksums. Release CI runs install/upgrade smoke tests on supported runners before publication. See [CI Artifacts](#ci-artifacts) above for integration test details.
+Both install `/usr/bin/momentum-server`, a system-level `momentum.service`,
+and a launcher. The `momentum` system account owns `/var/lib/momentum`; this
+directory (DB, encryption key, certificates) and any administrator config in
+`/etc/momentum/momentum.env` are outside package ownership and survive removal.
+The service binds loopback by default and generates a stable key on first run.
+For a network-facing installation configure trusted TLS and explicit access
+controls first.
+
+```bash
+# Select the package for your architecture (amd64/arm64 or x86_64/aarch64).
+sudo apt install ./momentum_X.Y.Z_amd64.deb
+sudo systemctl start momentum.service
+sudo systemctl status momentum.service
+curl -kfsS https://127.0.0.1:8443/health
+
+# Fedora/RHEL alternative:
+sudo dnf install ./momentum-X.Y.Z-1.x86_64.rpm
+sudo systemctl start momentum.service
+```
+
+Before upgrading stop the service and back up `/var/lib/momentum` including
+SQLite WAL/SHM and `/etc/momentum` while stopped. Upgrade with
+`sudo apt install ./momentum_NEW_amd64.deb` or
+`sudo dnf upgrade ./momentum-NEW-1.x86_64.rpm`; restart and check health and
+authenticated tasks. For rollback restore the backed-up DB/configuration
+before installing the previous compatible package: migrations may not be
+reversible. `sudo apt remove momentum` or `sudo dnf remove momentum` stops and
+disables the service and removes package files but retains data and config.
+
+### Windows MSI (x86-64)
+
+From an elevated terminal run
+`msiexec /i momentum-X.Y.Z-windows-amd64.msi /qn /l*v install.log`.
+The MSI installs under `%ProgramFiles%\Momentum` and registers a **manual**
+`Momentum` service. Before starting the service, an administrator must set its
+per-service `DB_PATH`, `MOMENTUM_ENCRYPTION_KEY`, `MOMENTUM_DEV_CERT_DIR`, and
+`LISTEN_ADDR=127.0.0.1` for LocalSystem; see the environment setup pattern in
+`scripts/packaging/windows/Install-Momentum.ps1`. Do not put a key on the
+`msiexec` command line or enable development mode on an exposed server. Stop
+the service and back up `%ProgramData%\Momentum` before upgrading with
+`msiexec /i momentum-NEW-windows-amd64.msi /qn /l*v upgrade.log`.
+Uninstall with `msiexec /x momentum-NEW-windows-amd64.msi /qn /l*v uninstall.log`;
+the service and binary are removed, but user data is not. For a rollback
+across migrations restore the backed-up DB and configuration first.
+
+The dependent installer-smoke task must validate install, upgrade and data
+preservation on native CI before #176 is complete. Archive smoke alone is
+not installer acceptance evidence.
 
 ## Complete Local Build
 

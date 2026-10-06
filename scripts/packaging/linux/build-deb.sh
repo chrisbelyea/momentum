@@ -1,82 +1,62 @@
 #!/usr/bin/env bash
-# Momentum Linux DEB package builder for #176 platform-native installers.
+# Build a system-wide Debian package from the release binary.
 set -euo pipefail
 
+VERSION="${VERSION:-v0.0.0}"
+VERSION="${VERSION#v}"
 VERSION="${VERSION:-0.0.0}"
 ARCH="${ARCH:-amd64}"
-BINARY="${BINARY:-dist/momentum-server-linux-${ARCH}}"
-PKGDIR="${PKGDIR:-dist/linux-deb}"
-DEBNAME="momentum_${VERSION}_${ARCH}.deb"
-
-mkdir -p "$PKGDIR/DEBIAN"
-cat > "$PKGDIR/DEBIAN/control" <<EOF
+BINARY="${BINARY:?BINARY must name the extracted release executable}"
+case "$ARCH" in amd64|arm64) ;; *) echo "Unsupported DEB architecture: $ARCH" >&2; exit 1;; esac
+[[ -f "$BINARY" ]] || { echo "Missing binary: $BINARY" >&2; exit 1; }
+mkdir -p dist
+staging="$(mktemp -d)"
+trap 'rm -rf "$staging"' EXIT
+mkdir -p "$staging/DEBIAN" "$staging/usr/bin" "$staging/usr/lib/momentum" "$staging/lib/systemd/system"
+chmod 0755 "$staging"
+install -m 0755 "$BINARY" "$staging/usr/bin/momentum-server"
+install -m 0755 scripts/packaging/linux/run-momentum.sh "$staging/usr/lib/momentum/run-momentum.sh"
+install -m 0644 scripts/packaging/linux/momentum-package.service "$staging/lib/systemd/system/momentum.service"
+cat > "$staging/DEBIAN/control" <<EOF
 Package: momentum
-Version: ${VERSION}
+Version: $VERSION
 Section: utils
 Priority: optional
-Architecture: ${ARCH}
-Maintainer: Momentum <maintainers@momentum.example>
-Description: Momentum task server (native DEB package)
- Momentum brings your to-dos, reminders, and CalDAV tasks into one flow.
+Architecture: $ARCH
+Maintainer: Momentum maintainers <https://github.com/chrisbelyea/momentum>
+Depends: adduser, systemd
+Description: Momentum task server (system service)
+ Momentum serves tasks securely over HTTPS on loopback by default.
 EOF
-
-mkdir -p "$PKGDIR/usr/bin" "$PKGDIR/lib/systemd/system" "$PKGDIR/etc/systemd/system"
-install -m 0755 "$BINARY" "$PKGDIR/usr/bin/momentum-server"
-
-cat > "$PKGDIR/lib/systemd/system/momentum.service" <<'EOF'
-[Unit]
-Description=Momentum Task Server
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/momentum-server
-Environment="DB_PATH=/var/lib/momentum/momentum.db"
-Environment="MOMENTUM_ENCRYPTION_KEY_FILE=/var/lib/momentum/encryption.key"
-WorkingDirectory=/var/lib/momentum
-User=momentum
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-cat > "$PKGDIR/DEBIAN/preinst" <<'EOF'
+cat > "$staging/DEBIAN/preinst" <<'EOF'
 #!/bin/sh
 set -e
-# Preserve existing data directory on upgrade.
-if [ ! -d /var/lib/momentum ]; then
-  mkdir -p /var/lib/momentum
-  chmod 700 /var/lib/momentum
-  chown momentum:momentum /var/lib/momentum
+if ! getent group momentum >/dev/null; then addgroup --system momentum; fi
+if ! getent passwd momentum >/dev/null; then
+  adduser --system --ingroup momentum --home /var/lib/momentum --no-create-home --disabled-login momentum
 fi
 EOF
-
-cat > "$PKGDIR/DEBIAN/postinst" <<'EOF'
+cat > "$staging/DEBIAN/postinst" <<'EOF'
 #!/bin/sh
 set -e
+install -d -m 0700 -o momentum -g momentum /var/lib/momentum
 if command -v systemctl >/dev/null 2>&1; then
   systemctl daemon-reload || true
-  systemctl enable momentum.service || true
+  if [ "$1" = configure ]; then systemctl enable momentum.service || true; systemctl try-restart momentum.service || true; fi
 fi
 EOF
-
-cat > "$PKGDIR/DEBIAN/prerm" <<'EOF'
+cat > "$staging/DEBIAN/prerm" <<'EOF'
 #!/bin/sh
 set -e
-if [ "$1" = "upgrade" ]; then
-  systemctl stop momentum.service 2>/dev/null || true
+if [ "$1" = remove ] || [ "$1" = deconfigure ]; then
+  if command -v systemctl >/dev/null 2>&1; then systemctl stop momentum.service || true; systemctl disable momentum.service || true; fi
 fi
 EOF
-
-cat > "$PKGDIR/DEBIAN/postrm" <<'EOF'
+cat > "$staging/DEBIAN/postrm" <<'EOF'
 #!/bin/sh
 set -e
-if [ "$1" = "purge" ]; then
-  echo "Purge requested: user data in /var/lib/momentum is intentionally kept unless explicitly removed."
-fi
+if command -v systemctl >/dev/null 2>&1; then systemctl daemon-reload || true; fi
+# Never delete /var/lib/momentum, including on purge: DB, keys, config, certs belong to the user.
 EOF
-
-chmod 0755 "$PKGDIR/DEBIAN/preinst" "$PKGDIR/DEBIAN/postinst" "$PKGDIR/DEBIAN/prerm" "$PKGDIR/DEBIAN/postrm"
-dpkg-deb --build "$PKGDIR" "dist/${DEBNAME}"
-echo "Built dist/${DEBNAME}"
+chmod 0755 "$staging/DEBIAN/"{preinst,postinst,prerm,postrm}
+dpkg-deb --root-owner-group --build "$staging" "dist/momentum_${VERSION}_${ARCH}.deb"
