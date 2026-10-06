@@ -43,6 +43,9 @@ func TestPasswordAndSessionLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if userID != 1 {
+		t.Fatalf("fresh registration should adopt the canonical compatibility user, got %d", userID)
+	}
 	if _, err := s.Authenticate("user@example.com", "wrong password"); err != ErrInvalidCredentials {
 		t.Fatalf("wrong password error=%v", err)
 	}
@@ -65,6 +68,35 @@ func TestPasswordAndSessionLifecycle(t *testing.T) {
 	s.Logout(w, r)
 	if _, err := s.UserID(r); err != ErrUnauthenticated {
 		t.Fatalf("revoked session error=%v", err)
+	}
+}
+
+func TestFirstRegistrationPreservesExistingCompatibilityTasks(t *testing.T) {
+	d := testDB(t)
+	defer d.Close()
+	if _, err := d.Exec(`INSERT INTO tasks(backend_id,uid,title,status,dtstamp,created_at)
+		VALUES(1,'before-account','Existing task','NEEDS-ACTION',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatal(err)
+	}
+	s := NewService(d)
+	userID, err := s.CreateUser("owner@example.com", "correct horse battery staple")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if userID != 1 {
+		t.Fatalf("existing compatibility user was not adopted: %d", userID)
+	}
+	var email string
+	if err := d.QueryRow("SELECT email FROM users WHERE id=1").Scan(&email); err != nil || email != "owner@example.com" {
+		t.Fatalf("adopted email=%q err=%v", email, err)
+	}
+	var tasks int
+	if err := d.QueryRow("SELECT COUNT(*) FROM tasks WHERE backend_id=1 AND title='Existing task'").Scan(&tasks); err != nil || tasks != 1 {
+		t.Fatalf("existing task was not preserved: count=%d err=%v", tasks, err)
+	}
+	var backends int
+	if err := d.QueryRow("SELECT COUNT(*) FROM backends WHERE user_id=1").Scan(&backends); err != nil || backends != 1 {
+		t.Fatalf("existing backend was not preserved: count=%d err=%v", backends, err)
 	}
 }
 
