@@ -43,6 +43,44 @@ jobs:
       - name: Exercise first-run launcher
         run: scripts/packaging/linux/test-launcher.sh "$GITHUB_WORKSPACE/bin/momentum-server"
 
+  packaging-linux-native-build:
+    name: Unsigned PR package build (${{ matrix.format }}/${{ matrix.arch }}) — NOT FOR RELEASE
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { format: deb, arch: amd64, goarch: amd64, cc: gcc }
+          - { format: deb, arch: arm64, goarch: arm64, cc: aarch64-linux-gnu-gcc }
+          - { format: rpm, arch: x86_64, goarch: amd64, cc: gcc }
+          - { format: rpm, arch: aarch64, goarch: arm64, cc: aarch64-linux-gnu-gcc }
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: { persist-credentials: false }
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod, cache: true }
+      - name: Install package/cross-build dependencies
+        run: sudo apt-get update && sudo apt-get install -y rpm gcc-aarch64-linux-gnu
+      - name: Build and inspect native package (unsigned; never publish)
+        env:
+          CGO_ENABLED: '1'
+          GOOS: linux
+          GOARCH: '${{ matrix.goarch }}'
+          CC: '${{ matrix.cc }}'
+          ARCH: '${{ matrix.arch }}'
+          FORMAT: '${{ matrix.format }}'
+          VERSION: v0.0.1
+        run: |
+          set -euo pipefail
+          go build -trimpath -o bin/momentum-server ./cmd/server
+          BINARY="$PWD/bin/momentum-server" scripts/packaging/linux/build-${FORMAT}.sh
+          if [ "$FORMAT" = deb ]; then
+            dpkg-deb -f "dist/momentum_0.0.1_${ARCH}.deb" Architecture | grep -Fx "$ARCH"
+          else
+            rpm -qp --qf '%{ARCH}\n' "dist/packages/momentum-0.0.1-1.${ARCH}.rpm" | grep -Fx "$ARCH"
+          fi
+          echo 'PASS: unsigned PR build; NOT FOR RELEASE'
+
   packaging-windows-launcher:
     name: Windows packaged launcher
     runs-on: windows-latest
@@ -58,6 +96,26 @@ jobs:
         run: |
           pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/packaging/windows/Test-Launcher.ps1 `
             -BinaryPath "$PWD/bin/momentum-server.exe"
+
+  packaging-windows-native-build:
+    name: Unsigned PR MSI build (amd64) — NOT FOR RELEASE
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: { persist-credentials: false }
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod, cache: true }
+      - name: Install WiX 3 toolset
+        shell: pwsh
+        run: choco install wixtoolset --no-progress -y
+      - name: Build unsigned MSI (not a trusted release)
+        shell: pwsh
+        run: |
+          go build -trimpath -o bin/momentum-server.exe ./cmd/server
+          if ($LASTEXITCODE -ne 0) { throw 'Windows server build failed' }
+          ./scripts/packaging/windows/build-msi.ps1 -Version v0.0.1 -BinaryPath "$PWD/bin/momentum-server.exe"
+          if (-not (Test-Path dist/windows-msi/momentum-0.0.1-windows-amd64.msi)) { throw 'MSI missing' }
+          Write-Host 'PASS: unsigned PR build; NOT FOR RELEASE'
 
   web-browser-e2e:
     name: Browser workflow (Chromium)
