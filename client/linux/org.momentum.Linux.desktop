@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Momentum
+Comment=Momentum tasks on your Linux desktop
+Exec=momentum-linux
+Terminal=false
+Categories=Office;ProjectManagement;
+StartupNotify=true
