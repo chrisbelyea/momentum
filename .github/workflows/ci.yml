@@ -45,28 +45,31 @@ jobs:
 
   packaging-linux-native-build:
     name: Unsigned PR package build (${{ matrix.format }}/${{ matrix.arch }}) — NOT FOR RELEASE
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { format: deb, arch: amd64, goarch: amd64, cc: gcc }
-          - { format: deb, arch: arm64, goarch: arm64, cc: aarch64-linux-gnu-gcc }
-          - { format: rpm, arch: x86_64, goarch: amd64, cc: gcc }
-          - { format: rpm, arch: aarch64, goarch: arm64, cc: aarch64-linux-gnu-gcc }
+          - { format: deb, arch: amd64, goarch: amd64, runner: ubuntu-latest }
+          - { format: deb, arch: arm64, goarch: arm64, runner: ubuntu-24.04-arm }
+          - { format: rpm, arch: x86_64, goarch: amd64, runner: ubuntu-latest }
+          - { format: rpm, arch: aarch64, goarch: arm64, runner: ubuntu-24.04-arm }
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with: { persist-credentials: false }
       - uses: actions/setup-go@v5
         with: { go-version-file: go.mod, cache: true }
-      - name: Install package/cross-build dependencies
-        run: sudo apt-get update && sudo apt-get install -y rpm gcc-aarch64-linux-gnu
+      - name: Install RPM builder
+        if: matrix.format == 'rpm'
+        run: sudo apt-get update && sudo apt-get install -y rpm
+      - name: Confirm native runner architecture
+        run: test "$(uname -m)" = "${{ matrix.goarch == 'arm64' && 'aarch64' || 'x86_64' }}"
       - name: Build and inspect native package (unsigned; never publish)
         env:
           CGO_ENABLED: '1'
           GOOS: linux
           GOARCH: '${{ matrix.goarch }}'
-          CC: '${{ matrix.cc }}'
+          CC: gcc
           ARCH: '${{ matrix.arch }}'
           FORMAT: '${{ matrix.format }}'
           VERSION: v0.0.1
