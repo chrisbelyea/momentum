@@ -109,6 +109,10 @@ namespace Momentum {
                 refresh ();
             } catch (Error e) {
                 password.text = "";
+                if (cookie != null) {
+                    try { request ("POST", "/auth/logout"); }
+                    catch (Error revoke_error) { announce ("Could not revoke failed login session: " + revoke_error.message); }
+                }
                 cookie = null;
                 announce (e.message);
             }
@@ -188,10 +192,15 @@ namespace Momentum {
             Gtk.Widget? child;
             while ((child = tasks_box.get_first_child ()) != null) tasks_box.remove (child);
             if (tasks == null) return;
-            for (uint i = 0; i < tasks.get_length (); i++) {
+            string[] columns = {"NEEDS-ACTION", "IN-PROCESS", "COMPLETED", "CANCELLED"};
+            for (int column = 0; column < (view.get_selected () == 0 ? 3 : 4); column++) {
+                string selected_status = columns[column];
+                if (view.get_selected () == 0) tasks_box.append (new Gtk.Label (selected_status));
+                for (uint i = 0; i < tasks.get_length (); i++) {
                 var task = tasks.get_object_element (i);
                 string status = task.get_string_member ("status");
-                if (view.get_selected () == 0 && status == "CANCELLED") continue;
+                if (view.get_selected () == 0 && status != selected_status) continue;
+                if (view.get_selected () == 1 && column != 0) continue;
                 string name = task.get_string_member ("title");
                 int64 id = task.get_int_member ("id");
                 string version = task.get_string_member ("updated_at");
@@ -206,6 +215,7 @@ namespace Momentum {
                 remove.clicked.connect (() => mutate ("DELETE", "/api/v1/tasks/%lld".printf (id), null, version));
                 row.append (remove);
                 tasks_box.append (row);
+                }
             }
         }
 

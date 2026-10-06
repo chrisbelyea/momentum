@@ -1,5 +1,7 @@
 project('momentum-linux', 'vala', version: '0.1.0', meson_version: '>=0.59')
 
+install_data('org.momentum.Linux.desktop', install_dir: join_paths(get_option('datadir'), 'applications'))
+
 executable('momentum-linux', 'main.vala',
   dependencies: [
     dependency('gtk4', version: '>=4.6'),
