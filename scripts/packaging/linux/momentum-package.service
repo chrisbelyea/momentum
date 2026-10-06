@@ -1,0 +1,20 @@
+[Unit]
+Description=Momentum Task Server
+After=network.target
+
+[Service]
+Type=simple
+User=momentum
+Group=momentum
+Environment=MOMENTUM_DATA_DIR=/var/lib/momentum
+Environment=LISTEN_ADDR=127.0.0.1
+EnvironmentFile=-/etc/momentum/momentum.env
+ExecStart=/usr/lib/momentum/run-momentum.sh /usr/bin/momentum-server
+WorkingDirectory=/var/lib/momentum
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/momentum
+
+[Install]
+WantedBy=multi-user.target

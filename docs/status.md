@@ -74,7 +74,7 @@ and verification gaps:
 | **External CalDAV** | Authenticated collection discovery, VTODO CRUD, REPORT lifecycle, a sync adapter, deterministic local compatibility profiles, and green Radicale 3.1.8 plus Nextcloud Tasks 0.17.1 provider-compatible checks are implemented; hosted-service certification remains explicitly out of scope. |
 | **VTODO wire format** | RFC 5545 parser/serializer, canonical persistence, date-only fidelity, provider extension preservation, and fixture coverage are implemented. The JSON/iCalendar boundary is documented in `docs/vtodo-api.md`. |
 | **Credential storage** | No OS keychain integration for clients. |
-| **Release packaging** | Native Linux/Windows launch and service helpers are included in archives. Published stable `v0.2.2` includes Linux amd64/arm64, Windows amd64, and native macOS amd64/arm64 archives; release CI passed platform-appropriate health and launcher smoke plus complete fresh-database task workflows before publication. |
+| **Release packaging** | Native Linux/Windows launch and service helpers are included in archives. Published stable `v0.3.0` includes Linux amd64/arm64, Windows amd64, and native macOS amd64/arm64 archives; MSI/DEB/RPM publication and install/upgrade/uninstall smoke remain open in [#176](https://github.com/chrisbelyea/momentum/issues/176). |
 
 ---
 
