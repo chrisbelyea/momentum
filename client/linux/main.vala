@@ -64,7 +64,7 @@ namespace Momentum {
             }
             if (code == 401) throw new IOError.PERMISSION_DENIED ("Session expired; sign in again");
             if (code == 409) throw new IOError.FAILED ("Task changed on the server; refresh before retrying");
-            if (code < 200 || code >= 300) throw new IOError.FAILED ("Server returned HTTP %d".printf (code));
+            if (code < 200 || code >= 300) throw new IOError.FAILED ("Server returned HTTP %u".printf (code));
             if (code == 204) return null;
             var parser = new Json.Parser ();
             parser.load_from_data ((string) bytes.get_data (), (ssize_t) bytes.get_size ());
