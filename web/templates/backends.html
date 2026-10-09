@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Momentum - Backends</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 20px; color: #333; background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        h1 { margin: 0 0 20px; text-align: center; font-size: 2rem; }
+        h2 { margin: 0 0 12px; font-size: 1.25rem; }
+        .view-nav { display: flex; justify-content: center; gap: 12px; margin-bottom: 20px; }
+        .view-nav a { padding: 8px 18px; border: 1px solid #ccc; border-radius: 6px; color: #555; background: #fff; text-decoration: none; font-weight: 500; }
+        .view-nav a.active { border-color: #1976d2; color: #fff; background: #1976d2; }
+        main { display: grid; grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.1fr); gap: 20px; max-width: 1050px; margin: 0 auto; }
+        section { padding: 20px; border-radius: 8px; background: #fff; box-shadow: 0 2px 8px rgb(0 0 0 / 8%); }
+        .backend-card { margin: 0 0 12px; padding: 14px; border: 1px solid #ddd; border-radius: 6px; }
+        .backend-card:last-child { margin-bottom: 0; }
+        .backend-card h3 { margin: 0 0 8px; font-size: 1rem; }
+        .backend-card dl { margin: 0 0 12px; font-size: .9rem; }
+        .backend-card dt { float: left; clear: left; width: 82px; color: #666; font-weight: 600; }
+        .backend-card dd { min-height: 1.35em; margin-left: 88px; overflow-wrap: anywhere; }
+        .backend-card dd:last-child { margin-bottom: 0; }
+        .backend-actions, .form-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        button, .button-link { padding: 8px 14px; border: 1px solid #bbb; border-radius: 5px; color: #333; background: #fff; cursor: pointer; font: inherit; text-decoration: none; }
+        button:hover, .button-link:hover { background: #f0f4f8; }
+        .primary { border-color: #1976d2; color: #fff; background: #1976d2; }
+        .primary:hover { background: #125ca5; }
+        .danger { border-color: #c62828; color: #c62828; }
+        .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+        .field label { font-weight: 600; }
+        .field input, .field select { width: 100%; padding: 9px 10px; border: 1px solid #bbb; border-radius: 5px; font: inherit; }
+        .field input:focus, .field select:focus, button:focus, a:focus { outline: 2px solid #1976d2; outline-offset: 2px; }
+        .help { margin: -7px 0 14px; color: #666; font-size: .86rem; }
+        .warning { padding: 10px; border-left: 4px solid #f57c00; color: #6d3b00; background: #fff8e1; font-size: .9rem; }
+        .status { min-height: 1.4em; margin: 14px 0 0; }
+        .status.success { color: #2e7d32; }
+        .status.error { color: #b71c1c; }
+        .empty { color: #666; }
+        @media (max-width: 760px) { main { grid-template-columns: 1fr; } body { padding: 12px; } }
+    </style>
+</head>
+<body>
+    <h1>🎯 Momentum</h1>
+    <nav class="view-nav" aria-label="Primary navigation">
+        <a href="/">📋 Board</a>
+        <a href="/list">📄 List</a>
+        <a href="/settings/backends" class="active" aria-current="page">⚙ Backends</a>
+    </nav>
+
+    <main>
+        <section aria-labelledby="configured-backends-heading">
+            <h2 id="configured-backends-heading">Configured backends</h2>
+            <p class="help">Choose a backend to use on the board, or edit its connection settings.</p>
+            <div id="backend-list">
+                {{ if .Backends }}
+                {{ range .Backends }}
+                <article class="backend-card" data-backend-id="{{ .ID }}" data-backend-type="{{ .Type }}" data-backend-name="{{ .Name }}"{{ if .Config }} data-url="{{ .Config.URL }}" data-username="{{ .Config.Username }}" data-calendar-path="{{ .Config.CalendarPath }}" data-client-cert-path="{{ .Config.ClientCertPath }}" data-client-key-path="{{ .Config.ClientKeyPath }}" data-skip-tls-verify="{{ .Config.SkipTLSVerify }}"{{ end }}>
+                    <h3>{{ .Name }}</h3>
+                    <dl>
+                        <dt>Type</dt><dd>{{ .Type }}</dd>
+                        {{ if .Config }}<dt>URL</dt><dd>{{ .Config.URL }}</dd>{{ end }}
+                        {{ if .Config }}{{ if .Config.Username }}<dt>Username</dt><dd>{{ .Config.Username }}</dd>{{ end }}{{ end }}
+                    </dl>
+                    <div class="backend-actions">
+                        <a class="button-link primary" href="/?backend_id={{ .ID }}">Use on board</a>
+                        <button type="button" class="edit-backend">Edit</button>
+                        <button type="button" class="delete-backend danger">Delete</button>
+                    </div>
+                </article>
+                {{ end }}
+                {{ else }}
+                <p class="empty">No backends are configured yet. Add one to get started.</p>
+                {{ end }}
+            </div>
+        </section>
+
+        <section aria-labelledby="backend-form-heading">
+            <h2 id="backend-form-heading">Add backend</h2>
+            <p class="help">Validate a CalDAV connection before saving it. Passwords are encrypted at rest and are never returned to this page.</p>
+            <form id="backend-form">
+                <input type="hidden" id="backend-id" name="id">
+                <div class="field">
+                    <label for="backend-name">Name</label>
+                    <input id="backend-name" name="name" required maxlength="200" autocomplete="off">
+                </div>
+                <div class="field">
+                    <label for="backend-type">Type</label>
+                    <select id="backend-type" name="backend_type">
+                        <option value="internal">Local tasks</option>
+                        <option value="external_caldav">External CalDAV</option>
+                    </select>
+                </div>
+                <div id="caldav-fields" hidden>
+                    <div class="field">
+                        <label for="backend-url">CalDAV HTTPS URL</label>
+                        <input id="backend-url" name="url" type="url" inputmode="url" placeholder="https://calendar.example.com/dav/tasks" autocomplete="url">
+                    </div>
+                    <p class="help">Momentum accepts HTTPS on port 443. Certificate verification can only be skipped for loopback development servers.</p>
+                    <div class="field">
+                        <label for="backend-username">Username</label>
+                        <input id="backend-username" name="username" autocomplete="username">
+                    </div>
+                    <div class="field">
+                        <label for="backend-password">Password or app password</label>
+                        <input id="backend-password" name="password" type="password" autocomplete="new-password">
+                        <span class="help">For an existing backend, leave this blank to keep its stored password.</span>
+                    </div>
+                    <div class="field">
+                        <label for="backend-calendar-path">Calendar path (optional)</label>
+                        <input id="backend-calendar-path" name="calendar_path" placeholder="/dav/calendars/me/tasks" autocomplete="off">
+                    </div>
+                    <div class="field">
+                        <label for="backend-client-cert">Client certificate path (optional)</label>
+                        <input id="backend-client-cert" name="client_cert_path" autocomplete="off">
+                    </div>
+                    <div class="field">
+                        <label for="backend-client-key">Client key path (optional)</label>
+                        <input id="backend-client-key" name="client_key_path" autocomplete="off">
+                    </div>
+                    <div class="field">
+                        <label><input id="backend-skip-tls" name="skip_tls_verify" type="checkbox"> Skip TLS verification (loopback development only)</label>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" id="validate-backend">Validate connection</button>
+                    <button type="submit" class="primary" id="save-backend">Save backend</button>
+                    <button type="button" id="reset-backend">Clear form</button>
+                </div>
+                <p id="backend-status" class="status" role="status" aria-live="polite"></p>
+            </form>
+            <p class="warning">Only use a client certificate or password you trust Momentum to store. Never put credentials in the URL.</p>
+        </section>
+    </main>
+
+    <script>
+        const form = document.getElementById('backend-form');
+        const type = document.getElementById('backend-type');
+        const caldavFields = document.getElementById('caldav-fields');
+        const status = document.getElementById('backend-status');
+        const id = document.getElementById('backend-id');
+
+        function setStatus(message, kind) {
+            status.textContent = message || '';
+            status.className = 'status' + (kind ? ' ' + kind : '');
+        }
+        function updateTypeVisibility() {
+            caldavFields.hidden = type.value !== 'external_caldav';
+            document.querySelectorAll('#caldav-fields input').forEach(input => input.required = type.value === 'external_caldav' && input.id === 'backend-url');
+        }
+        function configPayload() {
+            if (type.value !== 'external_caldav') return undefined;
+            const config = {
+                url: document.getElementById('backend-url').value.trim(),
+                username: document.getElementById('backend-username').value.trim(),
+                password: document.getElementById('backend-password').value,
+                calendar_path: document.getElementById('backend-calendar-path').value.trim(),
+                client_cert_path: document.getElementById('backend-client-cert').value.trim(),
+                client_key_path: document.getElementById('backend-client-key').value.trim(),
+                skip_tls_verify: document.getElementById('backend-skip-tls').checked,
+            };
+            return config;
+        }
+        function payload() {
+            const body = { name: document.getElementById('backend-name').value.trim(), backend_type: type.value };
+            const config = configPayload();
+            if (config) body.config = config;
+            return body;
+        }
+        async function jsonRequest(url, options) {
+            const response = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(options && options.headers || {}) } });
+            let body = null;
+            try { body = await response.json(); } catch (_) { /* error text is intentionally not copied into the page */ }
+            if (!response.ok) {
+                const message = body && typeof body.error === 'string' ? body.error : 'Request failed (' + response.status + ').';
+                throw new Error(message);
+            }
+            return body;
+        }
+        function resetForm() {
+            form.reset();
+            id.value = '';
+            document.getElementById('backend-form-heading').textContent = 'Add backend';
+            document.getElementById('save-backend').textContent = 'Save backend';
+            updateTypeVisibility();
+            setStatus('');
+        }
+        document.querySelectorAll('.edit-backend').forEach(button => button.addEventListener('click', () => {
+            const card = button.closest('.backend-card');
+            id.value = card.dataset.backendId;
+            document.getElementById('backend-name').value = card.dataset.backendName || '';
+            type.value = card.dataset.backendType || 'internal';
+            document.getElementById('backend-url').value = card.dataset.url || '';
+            document.getElementById('backend-username').value = card.dataset.username || '';
+            document.getElementById('backend-calendar-path').value = card.dataset.calendarPath || '';
+            document.getElementById('backend-client-cert').value = card.dataset.clientCertPath || '';
+            document.getElementById('backend-client-key').value = card.dataset.clientKeyPath || '';
+            document.getElementById('backend-skip-tls').checked = card.dataset.skipTlsVerify === 'true';
+            document.getElementById('backend-form-heading').textContent = 'Edit backend';
+            document.getElementById('save-backend').textContent = 'Save changes';
+            updateTypeVisibility();
+            setStatus('Password is not shown. Leave it blank to keep the stored password.');
+            document.getElementById('backend-name').focus();
+        }));
+        document.querySelectorAll('.delete-backend').forEach(button => button.addEventListener('click', async () => {
+            const card = button.closest('.backend-card');
+            const name = card.dataset.backendName || 'this backend';
+            if (!window.confirm('Delete ' + name + '? Tasks stored in this backend will also be deleted.')) return;
+            button.disabled = true;
+            try {
+                const response = await fetch('/backends/' + encodeURIComponent(card.dataset.backendId), { method: 'DELETE' });
+                if (!response.ok) throw new Error('Could not delete backend (' + response.status + ').');
+                location.reload();
+            } catch (error) {
+                button.disabled = false;
+                setStatus(error.message, 'error');
+            }
+        }));
+        type.addEventListener('change', updateTypeVisibility);
+        document.getElementById('reset-backend').addEventListener('click', resetForm);
+        document.getElementById('validate-backend').addEventListener('click', async () => {
+            if (type.value !== 'external_caldav') { setStatus('Only external CalDAV backends need connection validation.', 'error'); return; }
+            const body = payload();
+            if (!body.name || !body.config.url) { setStatus('Enter a name and CalDAV URL before validating.', 'error'); return; }
+            setStatus('Validating connection…');
+            try {
+                const result = await jsonRequest('/backends/validate', { method: 'POST', body: JSON.stringify(body) });
+                setStatus(result && result.message ? result.message : 'Connection validated successfully.', 'success');
+            } catch (error) { setStatus(error.message, 'error'); }
+        });
+        form.addEventListener('submit', async event => {
+            event.preventDefault();
+            const body = payload();
+            if (!body.name) { setStatus('A backend name is required.', 'error'); return; }
+            if (type.value === 'external_caldav' && !body.config.url) { setStatus('A CalDAV URL is required.', 'error'); return; }
+            const editing = id.value !== '';
+            setStatus(editing ? 'Saving changes…' : 'Saving backend…');
+            try {
+                const result = await jsonRequest(editing ? '/backends/' + encodeURIComponent(id.value) : '/backends', { method: editing ? 'PUT' : 'POST', body: JSON.stringify(body) });
+                window.location.href = '/?backend_id=' + encodeURIComponent(result.id);
+            } catch (error) { setStatus(error.message, 'error'); }
+        });
+        updateTypeVisibility();
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js', {scope: '/'}).catch(() => {});
+    </script>
+</body>
+</html>

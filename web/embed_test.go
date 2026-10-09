@@ -10,6 +10,7 @@ func TestEmbeddedAssetsPresent(t *testing.T) {
 		"templates/auth.html",
 		"templates/index.html",
 		"templates/list.html",
+		"templates/backends.html",
 		"static/manifest.json",
 		"static/sw.js",
 		"static/icon.svg",

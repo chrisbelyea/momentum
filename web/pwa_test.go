@@ -105,7 +105,7 @@ func TestServiceWorkerOnlyCachesStaticGETs(t *testing.T) {
 }
 
 func TestTemplatesRegisterRootServiceWorker(t *testing.T) {
-	for _, path := range []string{"templates/index.html", "templates/list.html"} {
+	for _, path := range []string{"templates/index.html", "templates/list.html", "templates/backends.html"} {
 		raw, err := fs.ReadFile(Files, path)
 		if err != nil {
 			t.Fatal(err)

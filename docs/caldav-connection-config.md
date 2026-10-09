@@ -32,6 +32,16 @@ no key is available. Production startup fails without an explicit key.
 
 ## API Endpoints
 
+### Browser setup
+
+For normal Windows and Linux use, open `/settings/backends` after signing in.
+The page can create, validate, edit, select, and delete owned backends without
+exposing stored passwords. Existing passwords are intentionally redacted; leave
+the password field blank while changing a name or URL only, or enter a new
+provider/app password when credentials have changed. Validation errors are
+redacted and actionable, and the server's HTTPS/loopback SSRF policy still
+applies to every validation request.
+
 ### List Backends
 ```
 GET /backends

@@ -8,6 +8,7 @@ This directory contains the web-based kanban board UI for Momentum.
 - **Accessible task controls**: Create, edit, delete, and change status with keyboard-friendly form controls; drag-and-drop remains an optional shortcut
 - **Rich task fields**: Edit title, description, status, due date, priority, and tags
 - **Backend selection**: Choose an owned backend from the board; backend and list filter state is represented in shareable URLs
+- **Backend settings**: Use `/settings/backends` to add, validate, edit, select, and delete owned local or external CalDAV backends
 - **Persistent state**: All changes are saved to the database and persist across page reloads
 - **Responsive design**: Works on desktop and mobile devices
 - **Accessible feedback**: Mutation errors and stale concurrent edits are announced through ARIA live regions and reconciled with server state
@@ -41,7 +42,23 @@ outside the current release scope.
 - `PATCH /api/tasks/{id}` - Edit task fields
 - `DELETE /api/tasks/{id}` - Delete a task
 - `PATCH /api/tasks/{id}/status` - Update task status
-- `GET /api/backends` - List the authenticated user's backends
+- `GET /backends` - List the authenticated user's backends
+
+## Backend setup in the browser
+
+Open **Backends** from the board or list navigation. The settings page uses the
+authenticated `/backends` JSON endpoints and never renders stored passwords;
+when editing an existing CalDAV backend, leave the password blank to retain the
+stored credential. Use an app-specific password where the provider supports it,
+and click **Validate connection** before saving an external backend.
+
+CalDAV URLs must use HTTPS on port 443. Certificate verification may only be
+skipped for loopback development servers. Credentials are encrypted at rest
+with `MOMENTUM_ENCRYPTION_KEY`; set that key before running a Windows service or
+Linux user service. If a provider password changes, edit the backend and enter
+the replacement password, validate it, and save. See
+[`docs/caldav-connection-config.md`](../docs/caldav-connection-config.md) for
+provider and recovery details.
 
 ### Status Mapping
 The kanban board maps task statuses to columns as follows:
